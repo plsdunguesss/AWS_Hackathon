@@ -12,14 +12,14 @@ The application follows a client-server architecture with a React-based frontend
 
 ```mermaid
 graph TB
-    A[Web Frontend] --> B[API Gateway]
+    A[React Frontend<br/>localhost:3000] --> B[Express API Server<br/>localhost:5000]
     B --> C[Conversation Service]
     B --> D[Risk Assessment Service]
     B --> E[Safety Monitor Service]
-    C --> F[AI/LLM Integration]
-    D --> G[Assessment Database]
+    C --> F[Local LLM<br/>Ollama/Llama2]
+    D --> G[SQLite Database]
     E --> H[Safety Rules Engine]
-    C --> I[Conversation History]
+    C --> G
     D --> J[Professional Referral Service]
 ```
 
@@ -27,10 +27,10 @@ graph TB
 
 - **Frontend**: React.js with TypeScript for type safety
 - **Backend**: Node.js with Express.js framework
-- **Database**: MongoDB for conversation history and user sessions
-- **AI Integration**: OpenAI API or similar LLM service
-- **Hosting**: AWS (EC2, S3, CloudFront for CDN)
-- **Security**: HTTPS, input sanitization, rate limiting
+- **Database**: SQLite for local development (conversation history and user sessions)
+- **AI Integration**: Local LLM (Ollama with Llama 2 or similar open-source model)
+- **Hosting**: Local development server (localhost)
+- **Security**: Input sanitization, rate limiting, local session management
 
 ## Components and Interfaces
 
@@ -60,6 +60,7 @@ interface ConversationService {
   processMessage(userId: string, message: string): Promise<AIResponse>
   generateEmpathicResponse(userInput: string, context: ConversationContext): Promise<string>
   applyCounselingTechniques(message: string): Promise<string>
+  callLocalLLM(prompt: string): Promise<string> // Integration with Ollama API
 }
 ```
 
@@ -183,10 +184,10 @@ interface SafetyFlags {
 ## Security and Privacy Considerations
 
 ### Data Protection
-- Encrypt all conversation data at rest and in transit
+- Store conversation data locally in SQLite database
 - Implement session-based storage (no permanent user accounts required)
-- Automatic data deletion after session ends
-- Comply with healthcare privacy standards where applicable
+- Automatic data deletion after session ends or on application restart
+- All data remains on local machine for privacy
 
 ### Content Filtering
 - Multi-layer content filtering for harmful suggestions
@@ -209,3 +210,23 @@ interface SafetyFlags {
 - Clear disclaimers about AI nature and limitations
 - Explicit statements about not replacing professional care
 - Documentation of when and why referrals are made
+## Loc
+al Development Setup
+
+### Prerequisites
+- Node.js (v18 or higher)
+- Ollama installed locally for LLM integration
+- SQLite for local database
+
+### Local LLM Integration
+- Use Ollama to run Llama 2 or similar open-source model locally
+- API endpoint: http://localhost:11434/api/generate
+- Model selection: llama2:7b or llama2:13b depending on system capabilities
+- Custom prompts designed for mental health counseling scenarios
+
+### Development Workflow
+1. Start Ollama service with chosen model
+2. Initialize SQLite database with required tables
+3. Start Express backend server on localhost:5000
+4. Start React development server on localhost:3000
+5. All data processing happens locally without external API calls
