@@ -25,8 +25,10 @@ graph TB
 
 ### Technology Stack
 
-- **Frontend**: React.js with TypeScript for type safety
-- **Backend**: Node.js with Express.js framework
+- **Frontend**: React.js with TypeScript (existing Vite setup)
+- **UI Components**: Custom UI library with shadcn/ui components
+- **Styling**: Tailwind CSS with custom mental health theme
+- **Backend**: Node.js with Express.js framework (to be added)
 - **Database**: SQLite for local development (conversation history and user sessions)
 - **AI Integration**: Local LLM (Ollama with Llama 2 or similar open-source model)
 - **Hosting**: Local development server (localhost)
@@ -34,23 +36,44 @@ graph TB
 
 ## Components and Interfaces
 
-### Frontend Components
+### Frontend Components (Based on Existing UI Design)
 
-#### ChatInterface Component
-- Handles user input and message display
-- Implements responsive design for mobile and desktop
-- Manages real-time conversation flow
-- Displays empathetic UI elements (warm colors, supportive messaging)
+#### Header Component
+- Navigation with "MindCare AI" branding and Brain icon
+- Menu items: Home, Assessment, Resources, Find Help
+- Sign In and Get Started buttons
 
-#### WelcomeScreen Component
-- Provides clear introduction to the assistant's capabilities
-- Explains limitations and when to seek professional help
-- Includes disclaimer about AI nature of the service
+#### HeroSection Component
+- Main landing page with call-to-action buttons
+- Feature cards highlighting Quick Assessment, Security, and Professional Network
+- Important disclaimer about AI limitations
 
-#### ReferralModal Component
-- Displays when risk assessment triggers professional referral
-- Provides local mental health resources and crisis hotlines
-- Offers gentle guidance without causing alarm
+#### GetStartedPage Component
+- Multi-step onboarding flow (welcome, goals, experience, preferences, ready)
+- Goal selection with mental health categories
+- Experience level assessment
+- User preferences for reminders and data sharing
+
+#### AssessmentForm Component
+- Progressive questionnaire with 8 mental health screening questions
+- Progress tracking and navigation between questions
+- Categories: anxiety, depression, stress, sleep, social
+- Radio button interface for answer selection
+
+#### ResultsDisplay Component
+- Shows assessment results with risk level categorization
+- Provides personalized recommendations
+- Triggers professional referral for high-risk scores (85%+)
+
+#### ProfessionalDirectory Component
+- Lists mental health professionals and resources
+- Integration point for referral system
+
+#### ChatInterface Component (To Be Added)
+- Real-time conversation with local LLM
+- Empathetic response generation
+- Safety monitoring and intervention
+- Session management and history
 
 ### Backend Services
 
