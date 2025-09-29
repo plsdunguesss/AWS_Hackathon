@@ -12,6 +12,7 @@ import { Separator } from "./ui/separator";
 interface GetStartedPageProps {
   onBack: () => void;
   onStartAssessment: () => void;
+  onComplete?: () => void;
 }
 
 type OnboardingStep = 'welcome' | 'goals' | 'experience' | 'preferences' | 'ready';
@@ -45,7 +46,7 @@ const experienceLevels = [
   }
 ];
 
-export function GetStartedPage({ onBack, onStartAssessment }: GetStartedPageProps) {
+export function GetStartedPage({ onBack, onStartAssessment, onComplete }: GetStartedPageProps) {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('welcome');
   const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
   const [experienceLevel, setExperienceLevel] = useState('');
@@ -90,7 +91,12 @@ export function GetStartedPage({ onBack, onStartAssessment }: GetStartedPageProp
     if (nextIndex < steps.length) {
       setCurrentStep(steps[nextIndex] as OnboardingStep);
     } else {
-      onStartAssessment();
+      // User has completed onboarding, redirect to dashboard
+      if (onComplete) {
+        onComplete();
+      } else {
+        onStartAssessment();
+      }
     }
   };
 
@@ -355,9 +361,8 @@ export function GetStartedPage({ onBack, onStartAssessment }: GetStartedPageProp
             
             <Button
               onClick={handleNext}
-              disabled={!canProceed()}
             >
-              {currentStep === 'ready' ? 'Start Assessment' : 'Continue'}
+              {currentStep === 'ready' ? (onComplete ? 'Complete Setup' : 'Start Assessment') : 'Continue'}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </div>

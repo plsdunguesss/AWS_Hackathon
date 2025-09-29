@@ -9,8 +9,12 @@ import { FindHelpPage } from "./components/FindHelpPage";
 import { SignInPage } from "./components/SignInPage";
 import { GetStartedPage } from "./components/GetStartedPage";
 import { LearnMorePage } from "./components/LearnMorePage";
+import { ChatPage } from "./components/ChatPage";
+import { DashboardPage } from "./components/DashboardPage";
+import { SettingsPage } from "./components/SettingsPage";
+import { ProgressPage } from "./components/ProgressPage";
 
-type AppState = 'home' | 'assessment' | 'results' | 'professionals' | 'resources' | 'findhelp' | 'signin' | 'getstarted' | 'learnmore';
+type AppState = 'home' | 'assessment' | 'results' | 'professionals' | 'resources' | 'findhelp' | 'signin' | 'getstarted' | 'learnmore' | 'chat' | 'dashboard' | 'settings' | 'progress';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<AppState>('home');
@@ -62,6 +66,22 @@ export default function App() {
     setCurrentView('learnmore');
   };
 
+  const handleViewChat = () => {
+    setCurrentView('chat');
+  };
+
+  const handleViewDashboard = () => {
+    setCurrentView('dashboard');
+  };
+
+  const handleViewSettings = () => {
+    setCurrentView('settings');
+  };
+
+  const handleViewProgress = () => {
+    setCurrentView('progress');
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Only show header on home view */}
@@ -74,6 +94,8 @@ export default function App() {
             else if (view === 'findhelp') handleViewFindHelp();
             else if (view === 'signin') handleViewSignIn();
             else if (view === 'getstarted') handleViewGetStarted();
+            else if (view === 'dashboard') handleViewDashboard();
+            else if (view === 'chat') handleViewChat();
           }}
         />
       )}
@@ -82,6 +104,7 @@ export default function App() {
         <HeroSection 
           onStartAssessment={handleStartAssessment}
           onLearnMore={handleViewLearnMore}
+          onViewDashboard={handleViewDashboard}
         />
       )}
       
@@ -126,6 +149,7 @@ export default function App() {
         <GetStartedPage 
           onBack={handleBackToHome}
           onStartAssessment={handleStartAssessment}
+          onComplete={handleViewDashboard}
         />
       )}
 
@@ -135,6 +159,30 @@ export default function App() {
           onGetStarted={handleViewGetStarted}
           onStartAssessment={handleStartAssessment}
         />
+      )}
+
+      {currentView === 'chat' && (
+        <ChatPage onBack={handleBackToHome} />
+      )}
+
+      {currentView === 'dashboard' && (
+        <DashboardPage 
+          onBack={handleBackToHome}
+          onStartChat={handleViewChat}
+          onViewResources={handleViewResources}
+          onStartAssessment={handleStartAssessment}
+          onViewProfessionals={handleViewProfessionals}
+          onViewProgress={handleViewProgress}
+          onViewSettings={handleViewSettings}
+        />
+      )}
+
+      {currentView === 'settings' && (
+        <SettingsPage onBack={() => setCurrentView('dashboard')} />
+      )}
+
+      {currentView === 'progress' && (
+        <ProgressPage onBack={() => setCurrentView('dashboard')} />
       )}
     </div>
   );

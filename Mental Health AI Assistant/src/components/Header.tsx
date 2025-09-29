@@ -39,6 +39,19 @@ export function Header({ onNavigate }: HeaderProps) {
           >
             Find Help
           </button>
+          {/* Temporary navigation for testing new pages */}
+          <button 
+            onClick={() => onNavigate?.('dashboard')} 
+            className="text-sm hover:text-primary transition-colors text-blue-600"
+          >
+            Dashboard
+          </button>
+          <button 
+            onClick={() => onNavigate?.('chat')} 
+            className="text-sm hover:text-primary transition-colors text-green-600"
+          >
+            AI Chat
+          </button>
         </nav>
 
         <div className="flex items-center space-x-4">

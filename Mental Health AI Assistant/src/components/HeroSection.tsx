@@ -5,9 +5,10 @@ import { Card } from "./ui/card";
 interface HeroSectionProps {
   onStartAssessment: () => void;
   onLearnMore?: () => void;
+  onViewDashboard?: () => void;
 }
 
-export function HeroSection({ onStartAssessment, onLearnMore }: HeroSectionProps) {
+export function HeroSection({ onStartAssessment, onLearnMore, onViewDashboard }: HeroSectionProps) {
   return (
     <section className="py-20 px-4">
       <div className="container max-w-6xl mx-auto">
@@ -35,6 +36,17 @@ export function HeroSection({ onStartAssessment, onLearnMore }: HeroSectionProps
               onClick={onLearnMore}
             >
               Learn More
+            </Button>
+          </div>
+          
+          {/* Temporary Demo Button */}
+          <div className="mt-6">
+            <Button 
+              variant="secondary" 
+              onClick={onViewDashboard}
+              className="text-blue-600 border-blue-200 hover:bg-blue-50"
+            >
+              🚀 View Dashboard Demo
             </Button>
           </div>
         </div>
