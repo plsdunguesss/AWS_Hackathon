@@ -12,7 +12,10 @@
   - Create API endpoints for conversation handling and risk assessment
   - _Requirements: 5.1, 5.3_
 
-- [ ] 2. Implement conversation service with safety monitoring
+- [-] 2. Implement conversation service with safety monitoring
+
+
+
   - Create ConversationService class with LLM integration methods
   - Implement SafetyMonitorService with harmful content detection
   - Create prompt templates for empathetic counseling responses

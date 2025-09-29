@@ -1,0 +1,387 @@
+import { SafetyFlags, CrisisResponse, CrisisResource } from '../types';
+
+export class SafetyMonitorService {
+    private harmfulContentPatterns: RegExp[];
+    private crisisKeywords: string[];
+    private selfHarmKeywords: string[];
+    private violenceKeywords: string[];
+    private suicidalKeywords: string[];
+
+    constructor() {
+        this.initializePatterns();
+    }
+
+    /**
+     * Scan content for harmful patterns and safety concerns
+     */
+    public async scanForHarmfulContent(message: string): Promise<SafetyFlags> {
+        const lowerMessage = message.toLowerCase();
+        const flaggedTerms: string[] = [];
+        let containsHarmfulContent = false;
+        let riskLevel: 'low' | 'medium' | 'high' | 'crisis' = 'low';
+        let requiresIntervention = false;
+
+        // Check for crisis-level content
+        const crisisScore = this.assessCrisisLevel(lowerMessage, flaggedTerms);
+        if (crisisScore >= 0.8) {
+            riskLevel = 'crisis';
+            containsHarmfulContent = true;
+            requiresIntervention = true;
+        } else if (crisisScore >= 0.6) {
+            riskLevel = 'high';
+            containsHarmfulContent = true;
+            requiresIntervention = true;
+        } else if (crisisScore >= 0.3) {
+            riskLevel = 'medium';
+            containsHarmfulContent = true;
+        }
+
+        // Check for self-harm indicators
+        const selfHarmScore = this.assessSelfHarmRisk(lowerMessage, flaggedTerms);
+        if (selfHarmScore >= 0.7) {
+            riskLevel = Math.max(riskLevel, 'high') as any;
+            containsHarmfulContent = true;
+            requiresIntervention = true;
+        }
+
+        // Check for violence indicators
+        const violenceScore = this.assessViolenceRisk(lowerMessage, flaggedTerms);
+        if (violenceScore >= 0.6) {
+            riskLevel = Math.max(riskLevel, 'high') as any;
+            containsHarmfulContent = true;
+            requiresIntervention = true;
+        }
+
+        return {
+            containsHarmfulContent,
+            riskLevel,
+            flaggedTerms: [...new Set(flaggedTerms)], // Remove duplicates
+            requiresIntervention
+        };
+    }
+
+    /**
+     * Filter and modify AI responses to prevent harmful suggestions
+     */
+    public async preventHarmfulSuggestions(aiResponse: string): Promise<string> {
+        let filteredResponse = aiResponse;
+
+        // Check if the response contains harmful suggestions
+        const safetyFlags = await this.scanForHarmfulContent(aiResponse);
+        
+        if (safetyFlags.containsHarmfulContent) {
+            // Replace harmful content with safe alternatives
+            filteredResponse = this.replaceHarmfulContent(aiResponse, safetyFlags.flaggedTerms);
+        }
+
+        // Ensure response doesn't provide medical advice
+        filteredResponse = this.filterMedicalAdvice(filteredResponse);
+
+        // Ensure response maintains supportive tone
+        filteredResponse = this.ensureSupportiveTone(filteredResponse);
+
+        return filteredResponse;
+    }
+
+    /**
+     * Handle crisis detection and provide appropriate response
+     */
+    public async handleCrisisDetection(userId: string, riskLevel: number): Promise<CrisisResponse> {
+        const isImmediate = riskLevel >= 0.85;
+        
+        const resources: CrisisResource[] = [
+            {
+                name: "National Suicide Prevention Lifeline",
+                phone: "988",
+                description: "24/7 crisis support and suicide prevention",
+                available24h: true
+            },
+            {
+                name: "Crisis Text Line",
+                phone: "741741",
+                description: "Text HOME for 24/7 crisis support via text",
+                available24h: true
+            },
+            {
+                name: "SAMHSA National Helpline",
+                phone: "1-800-662-4357",
+                description: "Treatment referral and information service",
+                available24h: true
+            },
+            {
+                name: "Emergency Services",
+                phone: "911",
+                description: "For immediate life-threatening emergencies",
+                available24h: true
+            }
+        ];
+
+        let message: string;
+        if (isImmediate) {
+            message = `I'm very concerned about your safety right now. Please reach out for immediate help. You don't have to go through this alone, and there are people who want to help you.
+
+If you're in immediate danger, please call 911 or go to your nearest emergency room.
+
+For crisis support, you can also contact:`;
+        } else {
+            message = `I notice you might be going through a difficult time. It's important to have professional support when dealing with these feelings. Here are some resources that might help:`;
+        }
+
+        return {
+            isImmediate,
+            resources,
+            message,
+            shouldEndSession: isImmediate
+        };
+    }
+
+    /**
+     * Initialize harmful content patterns and keywords
+     */
+    private initializePatterns(): void {
+        // Crisis-level keywords that require immediate intervention
+        this.crisisKeywords = [
+            'kill myself', 'end my life', 'suicide', 'suicidal', 'want to die',
+            'better off dead', 'end it all', 'can\'t go on', 'no point living',
+            'planning to die', 'goodbye forever', 'final goodbye'
+        ];
+
+        // Self-harm related keywords
+        this.selfHarmKeywords = [
+            'hurt myself', 'self harm', 'self-harm', 'cut myself', 'cutting',
+            'burn myself', 'punish myself', 'deserve pain', 'harm myself',
+            'self injury', 'self-injury'
+        ];
+
+        // Violence-related keywords
+        this.violenceKeywords = [
+            'hurt others', 'kill someone', 'murder', 'violence', 'attack',
+            'harm others', 'revenge', 'get back at', 'make them pay',
+            'violent thoughts'
+        ];
+
+        // Suicidal ideation keywords
+        this.suicidalKeywords = [
+            'suicide methods', 'how to kill', 'ways to die', 'painless death',
+            'overdose', 'hanging', 'jumping', 'pills to die'
+        ];
+
+        // Compile harmful content patterns
+        this.harmfulContentPatterns = [
+            ...this.crisisKeywords,
+            ...this.selfHarmKeywords,
+            ...this.violenceKeywords,
+            ...this.suicidalKeywords
+        ].map(keyword => new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
+    }
+
+    /**
+     * Assess crisis level based on message content
+     */
+    private assessCrisisLevel(message: string, flaggedTerms: string[]): number {
+        let score = 0;
+
+        // Check for explicit crisis keywords
+        this.crisisKeywords.forEach(keyword => {
+            if (message.includes(keyword)) {
+                score += 0.3;
+                flaggedTerms.push(keyword);
+            }
+        });
+
+        // Check for suicidal ideation
+        this.suicidalKeywords.forEach(keyword => {
+            if (message.includes(keyword)) {
+                score += 0.4;
+                flaggedTerms.push(keyword);
+            }
+        });
+
+        // Check for immediate danger phrases
+        const immediateDangerPhrases = [
+            'right now', 'tonight', 'today', 'this moment', 'can\'t wait',
+            'have a plan', 'ready to', 'going to do it'
+        ];
+
+        immediateDangerPhrases.forEach(phrase => {
+            if (message.includes(phrase)) {
+                score += 0.2;
+                flaggedTerms.push(phrase);
+            }
+        });
+
+        return Math.min(1, score);
+    }
+
+    /**
+     * Assess self-harm risk level
+     */
+    private assessSelfHarmRisk(message: string, flaggedTerms: string[]): number {
+        let score = 0;
+
+        this.selfHarmKeywords.forEach(keyword => {
+            if (message.includes(keyword)) {
+                score += 0.25;
+                flaggedTerms.push(keyword);
+            }
+        });
+
+        // Check for self-harm methods or tools
+        const selfHarmMethods = [
+            'razor', 'blade', 'knife', 'scissors', 'glass', 'lighter',
+            'matches', 'cigarette', 'burning'
+        ];
+
+        selfHarmMethods.forEach(method => {
+            if (message.includes(method) && message.includes('myself')) {
+                score += 0.3;
+                flaggedTerms.push(method);
+            }
+        });
+
+        return Math.min(1, score);
+    }
+
+    /**
+     * Assess violence risk level
+     */
+    private assessViolenceRisk(message: string, flaggedTerms: string[]): number {
+        let score = 0;
+
+        this.violenceKeywords.forEach(keyword => {
+            if (message.includes(keyword)) {
+                score += 0.2;
+                flaggedTerms.push(keyword);
+            }
+        });
+
+        // Check for specific threats
+        const threatPatterns = [
+            'going to hurt', 'will kill', 'plan to attack', 'get revenge',
+            'make them suffer', 'they deserve to die'
+        ];
+
+        threatPatterns.forEach(pattern => {
+            if (message.includes(pattern)) {
+                score += 0.4;
+                flaggedTerms.push(pattern);
+            }
+        });
+
+        return Math.min(1, score);
+    }
+
+    /**
+     * Replace harmful content with safe alternatives
+     */
+    private replaceHarmfulContent(response: string, flaggedTerms: string[]): string {
+        let safeResponse = response;
+
+        // Replace specific harmful suggestions with safe alternatives
+        const harmfulReplacements = new Map([
+            ['kill yourself', 'reach out for help'],
+            ['end your life', 'seek professional support'],
+            ['hurt yourself', 'practice self-care'],
+            ['you should die', 'you deserve support'],
+            ['give up', 'seek help'],
+            ['it\'s hopeless', 'there is hope and help available'],
+            ['no one cares', 'people do care about you'],
+            ['you\'re worthless', 'you have value']
+        ]);
+
+        harmfulReplacements.forEach((replacement, harmful) => {
+            const regex = new RegExp(harmful, 'gi');
+            safeResponse = safeResponse.replace(regex, replacement);
+        });
+
+        // If response still contains flagged terms, provide a safe generic response
+        const stillContainsHarmful = flaggedTerms.some(term => 
+            safeResponse.toLowerCase().includes(term.toLowerCase())
+        );
+
+        if (stillContainsHarmful) {
+            safeResponse = `I understand you're going through a difficult time. It's important to reach out for professional support when dealing with these feelings. Would you like me to help you find mental health resources in your area?`;
+        }
+
+        return safeResponse;
+    }
+
+    /**
+     * Filter out medical advice from responses
+     */
+    private filterMedicalAdvice(response: string): string {
+        const medicalAdvicePatterns = [
+            /you should take \w+ medication/gi,
+            /i recommend \w+ pills/gi,
+            /you need \w+ therapy/gi,
+            /you have \w+ disorder/gi,
+            /you are diagnosed with/gi,
+            /take \d+ mg of/gi
+        ];
+
+        let filteredResponse = response;
+
+        medicalAdvicePatterns.forEach(pattern => {
+            filteredResponse = filteredResponse.replace(pattern, 
+                'it might be helpful to discuss this with a healthcare professional'
+            );
+        });
+
+        // Replace diagnostic language
+        const diagnosticReplacements = new Map([
+            ['you have depression', 'you might be experiencing symptoms that could benefit from professional evaluation'],
+            ['you are bipolar', 'these experiences might warrant professional assessment'],
+            ['you have anxiety disorder', 'these feelings might benefit from professional support']
+        ]);
+
+        diagnosticReplacements.forEach((replacement, diagnostic) => {
+            const regex = new RegExp(diagnostic, 'gi');
+            filteredResponse = filteredResponse.replace(regex, replacement);
+        });
+
+        return filteredResponse;
+    }
+
+    /**
+     * Ensure response maintains supportive and empathetic tone
+     */
+    private ensureSupportiveTone(response: string): string {
+        let supportiveResponse = response;
+
+        // Replace dismissive language
+        const dismissiveReplacements = new Map([
+            ['just get over it', 'healing takes time, and that\'s okay'],
+            ['stop being sad', 'it\'s natural to feel sad sometimes'],
+            ['think positive', 'it\'s okay to acknowledge difficult feelings'],
+            ['you\'re overreacting', 'your feelings are valid'],
+            ['calm down', 'take your time to process these feelings'],
+            ['don\'t worry', 'it\'s understandable to feel worried']
+        ]);
+
+        dismissiveReplacements.forEach((replacement, dismissive) => {
+            const regex = new RegExp(dismissive, 'gi');
+            supportiveResponse = supportiveResponse.replace(regex, replacement);
+        });
+
+        // Ensure empathetic language is present
+        if (!this.containsEmpathicLanguage(supportiveResponse)) {
+            supportiveResponse = `I hear you, and I want you to know that your feelings are valid. ${supportiveResponse}`;
+        }
+
+        return supportiveResponse;
+    }
+
+    /**
+     * Check if response contains empathetic language
+     */
+    private containsEmpathicLanguage(response: string): boolean {
+        const empathicPhrases = [
+            'i understand', 'i hear you', 'that sounds', 'i can imagine',
+            'it makes sense', 'you\'re not alone', 'that must be',
+            'i appreciate you sharing', 'thank you for', 'it\'s okay to feel'
+        ];
+
+        const lowerResponse = response.toLowerCase();
+        return empathicPhrases.some(phrase => lowerResponse.includes(phrase));
+    }
+}
