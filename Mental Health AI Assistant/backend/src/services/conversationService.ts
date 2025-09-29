@@ -1,17 +1,27 @@
 import { OllamaService } from './ollamaService';
+import { HuggingFaceService } from './huggingFaceService';
 import { SafetyMonitorService } from './safetyMonitorService';
 import { PromptTemplateService } from './promptTemplates';
 import { AIResponse, ConversationContext, Message, RiskScore, SafetyFlags } from '../types';
 
 export class ConversationService {
     private ollamaService: OllamaService;
+    private huggingFaceService: HuggingFaceService;
     private safetyMonitor: SafetyMonitorService;
     private promptTemplates: PromptTemplateService;
+    private useHuggingFace: boolean;
 
-    constructor(ollamaService?: OllamaService, safetyMonitor?: SafetyMonitorService) {
+    constructor(
+        ollamaService?: OllamaService, 
+        safetyMonitor?: SafetyMonitorService,
+        huggingFaceService?: HuggingFaceService,
+        useHuggingFace: boolean = true
+    ) {
         this.ollamaService = ollamaService || new OllamaService();
+        this.huggingFaceService = huggingFaceService || new HuggingFaceService();
         this.safetyMonitor = safetyMonitor || new SafetyMonitorService();
         this.promptTemplates = new PromptTemplateService();
+        this.useHuggingFace = useHuggingFace;
     }
 
     /**
@@ -113,13 +123,21 @@ export class ConversationService {
     }
 
     /**
-     * Call the local LLM service
+     * Call the LLM service (Hugging Face or Ollama)
      */
     public async callLocalLLM(prompt: string): Promise<string> {
-        return await this.ollamaService.generateResponse(prompt, {
-            temperature: 0.7,
-            top_p: 0.9
-        });
+        if (this.useHuggingFace) {
+            return await this.huggingFaceService.generateResponse(prompt, {
+                temperature: 0.7,
+                top_p: 0.9,
+                max_tokens: 150
+            });
+        } else {
+            return await this.ollamaService.generateResponse(prompt, {
+                temperature: 0.7,
+                top_p: 0.9
+            });
+        }
     }
 
     /**
@@ -187,14 +205,14 @@ export class ConversationService {
         // Count empathy indicators
         empathyIndicators.forEach(indicator => {
             if (lowerResponse.includes(indicator)) {
-                score += 0.05;
+                score += 0.08;
             }
         });
 
         // Count supportive language
         supportiveLanguage.forEach(phrase => {
             if (lowerResponse.includes(phrase)) {
-                score += 0.03;
+                score += 0.05;
             }
         });
 

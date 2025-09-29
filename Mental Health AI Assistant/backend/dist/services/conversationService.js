@@ -2,13 +2,16 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ConversationService = void 0;
 const ollamaService_1 = require("./ollamaService");
+const huggingFaceService_1 = require("./huggingFaceService");
 const safetyMonitorService_1 = require("./safetyMonitorService");
 const promptTemplates_1 = require("./promptTemplates");
 class ConversationService {
-    constructor(ollamaService, safetyMonitor) {
+    constructor(ollamaService, safetyMonitor, huggingFaceService, useHuggingFace = true) {
         this.ollamaService = ollamaService || new ollamaService_1.OllamaService();
+        this.huggingFaceService = huggingFaceService || new huggingFaceService_1.HuggingFaceService();
         this.safetyMonitor = safetyMonitor || new safetyMonitorService_1.SafetyMonitorService();
         this.promptTemplates = new promptTemplates_1.PromptTemplateService();
+        this.useHuggingFace = useHuggingFace;
     }
     /**
      * Process a user message and generate an AI response with safety monitoring
@@ -90,13 +93,22 @@ class ConversationService {
         return enhancedPrompt;
     }
     /**
-     * Call the local LLM service
+     * Call the LLM service (Hugging Face or Ollama)
      */
     async callLocalLLM(prompt) {
-        return await this.ollamaService.generateResponse(prompt, {
-            temperature: 0.7,
-            top_p: 0.9
-        });
+        if (this.useHuggingFace) {
+            return await this.huggingFaceService.generateResponse(prompt, {
+                temperature: 0.7,
+                top_p: 0.9,
+                max_tokens: 150
+            });
+        }
+        else {
+            return await this.ollamaService.generateResponse(prompt, {
+                temperature: 0.7,
+                top_p: 0.9
+            });
+        }
     }
     /**
      * Select appropriate counseling techniques based on message content
@@ -151,13 +163,13 @@ class ConversationService {
         // Count empathy indicators
         empathyIndicators.forEach(indicator => {
             if (lowerResponse.includes(indicator)) {
-                score += 0.05;
+                score += 0.08;
             }
         });
         // Count supportive language
         supportiveLanguage.forEach(phrase => {
             if (lowerResponse.includes(phrase)) {
-                score += 0.03;
+                score += 0.05;
             }
         });
         // Penalize directive or dismissive language

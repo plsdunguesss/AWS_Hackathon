@@ -1,7 +1,11 @@
+import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+
+// Load environment variables
+dotenv.config();
 import { Database } from './database/database';
 import { conversationRoutes } from './routes/conversation';
 import { riskAssessmentRoutes } from './routes/riskAssessment';

@@ -1,11 +1,14 @@
 import { OllamaService } from './ollamaService';
+import { HuggingFaceService } from './huggingFaceService';
 import { SafetyMonitorService } from './safetyMonitorService';
 import { AIResponse, ConversationContext } from '../types';
 export declare class ConversationService {
     private ollamaService;
+    private huggingFaceService;
     private safetyMonitor;
     private promptTemplates;
-    constructor(ollamaService?: OllamaService, safetyMonitor?: SafetyMonitorService);
+    private useHuggingFace;
+    constructor(ollamaService?: OllamaService, safetyMonitor?: SafetyMonitorService, huggingFaceService?: HuggingFaceService, useHuggingFace?: boolean);
     /**
      * Process a user message and generate an AI response with safety monitoring
      */
@@ -19,7 +22,7 @@ export declare class ConversationService {
      */
     applyCounselingTechniques(message: string, context: ConversationContext): string;
     /**
-     * Call the local LLM service
+     * Call the LLM service (Hugging Face or Ollama)
      */
     callLocalLLM(prompt: string): Promise<string>;
     /**

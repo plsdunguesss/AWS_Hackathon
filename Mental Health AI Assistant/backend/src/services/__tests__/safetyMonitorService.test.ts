@@ -31,7 +31,7 @@ describe('SafetyMonitorService', () => {
 
             // Assert
             expect(result.containsHarmfulContent).toBe(true);
-            expect(result.riskLevel).toBeOneOf(['medium', 'high']);
+            expect(['medium', 'high']).toContain(result.riskLevel);
             expect(result.flaggedTerms).toContain('hurt myself');
         });
 
@@ -44,7 +44,7 @@ describe('SafetyMonitorService', () => {
 
             // Assert
             expect(result.containsHarmfulContent).toBe(true);
-            expect(result.flaggedTerms).toContain('hurt others');
+            expect(result.flaggedTerms).toContain('hurt someone');
         });
 
         it('should not flag normal emotional content', async () => {

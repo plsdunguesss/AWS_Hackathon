@@ -50,5 +50,9 @@ export declare class SafetyMonitorService {
      * Check if response contains empathetic language
      */
     private containsEmpathicLanguage;
+    /**
+     * Helper method to compare and return higher risk level
+     */
+    private getHigherRiskLevel;
 }
 //# sourceMappingURL=safetyMonitorService.d.ts.map
