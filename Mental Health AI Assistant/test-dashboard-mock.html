@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard Integration Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <h1>Dashboard Integration Test</h1>
+    <div id="results"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        const results = document.getElementById('results');
+
+        function addResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.textContent = message;
+            results.appendChild(div);
+        }
+
+        async function testDashboardIntegration() {
+            addResult('🧪 Starting Dashboard Integration Test...', 'info');
+
+            try {
+                // Test 1: Health check
+                addResult('1. Testing health endpoint...', 'info');
+                const healthResponse = await fetch(`${API_BASE}/health`);
+                if (healthResponse.ok) {
+                    addResult('✅ Health check passed', 'success');
+                } else {
+                    throw new Error('Health check failed');
+                }
+
+                // Test 2: Create session
+                addResult('2. Creating session...', 'info');
+                const sessionResponse = await fetch(`${API_BASE}/sessions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (!sessionResponse.ok) {
+                    throw new Error('Session creation failed');
+                }
+                
+                const sessionData = await sessionResponse.json();
+                const sessionId = sessionData.session.id;
+                addResult(`✅ Session created: ${sessionId}`, 'success');
+
+                // Test 3: Get dashboard data
+                addResult('3. Getting dashboard data...', 'info');
+                const dashboardResponse = await fetch(`${API_BASE}/dashboard/${sessionId}`);
+                
+                if (dashboardResponse.ok) {
+                    const dashboardData = await dashboardResponse.json();
+                    addResult('✅ Dashboard data retrieved successfully', 'success');
+                    addResult(`📊 Dashboard data: ${JSON.stringify(dashboardData.data, null, 2)}`, 'info');
+                } else {
+                    addResult('⚠️ Dashboard endpoint not available, using fallback data', 'error');
+                }
+
+                // Test 4: Submit mood entry
+                addResult('4. Submitting mood entry...', 'info');
+                const moodResponse = await fetch(`${API_BASE}/dashboard/mood/entry`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId,
+                        mood: 8,
+                        energy: 7,
+                        stress: 3,
+                        anxiety: 2,
+                        sleep: 8,
+                        notes: 'Test mood entry'
+                    })
+                });
+
+                if (moodResponse.ok) {
+                    addResult('✅ Mood entry submitted successfully', 'success');
+                } else {
+                    addResult('⚠️ Mood entry failed, check backend', 'error');
+                }
+
+                addResult('🎉 Dashboard integration test completed!', 'success');
+
+            } catch (error) {
+                addResult(`❌ Test failed: ${error.message}`, 'error');
+                addResult('💡 Make sure the backend server is running on port 5000', 'info');
+            }
+        }
+
+        // Run test when page loads
+        window.onload = testDashboardIntegration;
+    </script>
+</body>
+</html>

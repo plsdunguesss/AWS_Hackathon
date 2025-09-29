@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ArrowLeft, User, Bell, Shield, Palette, HelpCircle, LogOut, Edit, Trash2, Download, Upload } from "lucide-react";
+import { useState, useEffect } from "react";
+import { User, Bell, Shield, Palette, HelpCircle, LogOut, Edit, Trash2, Download, Upload, AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
@@ -11,88 +11,201 @@ import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Separator } from "./ui/separator";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Textarea } from "./ui/textarea";
+import { useSession } from "../hooks/useSession";
+import { useUserProfile } from "../hooks/useUserProfile";
 
 interface SettingsPageProps {
   onBack: () => void;
 }
 
 export function SettingsPage({ onBack }: SettingsPageProps) {
-  const [profile, setProfile] = useState({
-    firstName: "Sarah",
-    lastName: "Johnson",
-    email: "sarah.johnson@email.com",
-    bio: "Working on improving my mental health journey with mindfulness and therapy.",
-    phone: "+1 (555) 123-4567"
+  const { session } = useSession();
+  const { 
+    profile, 
+    preferences, 
+    loading, 
+    error, 
+    saving, 
+    updateProfile, 
+    updatePreferences, 
+    exportData, 
+    deleteAccount 
+  } = useUserProfile(session?.id || null);
+
+  // Local state for form inputs
+  const [localProfile, setLocalProfile] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    bio: "",
+    phone: ""
   });
 
-  const [notifications, setNotifications] = useState({
-    checkInReminders: true,
-    chatNotifications: true,
-    appointmentReminders: true,
-    weeklyReports: false,
-    emergencyAlerts: true,
-    marketingEmails: false
-  });
-
-  const [privacy, setPrivacy] = useState({
-    dataSharing: false,
-    anonymousResearch: true,
-    profileVisibility: "private",
-    activityTracking: true
-  });
-
-  const [preferences, setPreferences] = useState({
+  const [localPreferences, setLocalPreferences] = useState({
     theme: "system",
     language: "en",
     timezone: "America/New_York",
     reminderTime: "09:00",
-    weeklyReportDay: "sunday"
+    weeklyReportDay: "sunday",
+    notifications: {
+      checkInReminders: true,
+      chatNotifications: true,
+      appointmentReminders: true,
+      weeklyReports: false,
+      emergencyAlerts: true,
+      marketingEmails: false
+    },
+    privacy: {
+      dataSharing: false,
+      anonymousResearch: true,
+      profileVisibility: "private" as const,
+      activityTracking: true
+    }
   });
 
+  const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Update local state when backend data loads
+  useEffect(() => {
+    if (profile) {
+      setLocalProfile({
+        firstName: profile.firstName || "",
+        lastName: profile.lastName || "",
+        email: profile.email || "",
+        bio: profile.bio || "",
+        phone: profile.phone || ""
+      });
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    if (preferences) {
+      setLocalPreferences(prev => ({
+        ...prev,
+        ...preferences
+      }));
+    }
+  }, [preferences]);
+
   const handleProfileUpdate = (field: string, value: string) => {
-    setProfile(prev => ({ ...prev, [field]: value }));
+    setLocalProfile(prev => ({ ...prev, [field]: value }));
   };
 
   const handleNotificationToggle = (setting: string) => {
-    setNotifications(prev => ({ ...prev, [setting]: !prev[setting as keyof typeof prev] }));
+    setLocalPreferences(prev => ({
+      ...prev,
+      notifications: {
+        ...prev.notifications,
+        [setting]: !prev.notifications[setting as keyof typeof prev.notifications]
+      }
+    }));
   };
 
   const handlePrivacyToggle = (setting: string) => {
-    setPrivacy(prev => ({ ...prev, [setting]: !prev[setting as keyof typeof prev] }));
+    setLocalPreferences(prev => ({
+      ...prev,
+      privacy: {
+        ...prev.privacy,
+        [setting]: !prev.privacy[setting as keyof typeof prev.privacy]
+      }
+    }));
   };
 
   const handlePreferenceChange = (setting: string, value: string) => {
-    setPreferences(prev => ({ ...prev, [setting]: value }));
+    setLocalPreferences(prev => ({ ...prev, [setting]: value }));
   };
 
-  const handleExportData = () => {
-    // In a real app, this would trigger data export
-    console.log("Exporting user data...");
+  const handleSaveProfile = async () => {
+    const result = await updateProfile(localProfile);
+    if (result.success) {
+      setSaveStatus({ type: 'success', message: 'Profile updated successfully!' });
+    } else {
+      setSaveStatus({ type: 'error', message: result.error || 'Failed to update profile' });
+    }
+    setTimeout(() => setSaveStatus(null), 3000);
   };
 
-  const handleDeleteAccount = () => {
-    // In a real app, this would show a confirmation dialog
-    console.log("Account deletion requested...");
+  const handleSavePreferences = async () => {
+    const result = await updatePreferences(localPreferences);
+    if (result.success) {
+      setSaveStatus({ type: 'success', message: 'Preferences saved successfully!' });
+    } else {
+      setSaveStatus({ type: 'error', message: result.error || 'Failed to save preferences' });
+    }
+    setTimeout(() => setSaveStatus(null), 3000);
   };
+
+  const handleExportData = async () => {
+    const result = await exportData();
+    if (result.success) {
+      setSaveStatus({ type: 'success', message: 'Data export initiated!' });
+    } else {
+      setSaveStatus({ type: 'error', message: result.error || 'Failed to export data' });
+    }
+    setTimeout(() => setSaveStatus(null), 3000);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+      const result = await deleteAccount();
+      if (result.success) {
+        setSaveStatus({ type: 'success', message: 'Account deletion initiated' });
+        // In a real app, this would redirect to a goodbye page
+      } else {
+        setSaveStatus({ type: 'error', message: result.error || 'Failed to delete account' });
+      }
+      setTimeout(() => setSaveStatus(null), 3000);
+    }
+  };
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 mx-auto mb-4 text-primary animate-spin" />
+          <p className="text-lg font-medium">Loading your settings...</p>
+          <p className="text-sm text-muted-foreground">Retrieving your profile and preferences</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="bg-muted/30">
       {/* Header */}
-      <div className="border-b bg-card">
-        <div className="container max-w-4xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={onBack}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <h1 className="text-2xl">Settings</h1>
-              <p className="text-muted-foreground">Manage your account and preferences</p>
-            </div>
+      <div className="border-b bg-card mb-6">
+        <div className="px-4 py-4">
+          <div>
+            <h1 className="text-2xl">Settings</h1>
+            <p className="text-muted-foreground">Manage your account and preferences</p>
           </div>
         </div>
       </div>
 
-      <div className="container max-w-4xl mx-auto px-4 py-8">
+      {/* Status Messages */}
+      {(error || saveStatus) && (
+        <div className="px-4 pt-4">
+          {error && (
+            <Alert className="border-orange-200 bg-orange-50 mb-2">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+              <AlertDescription className="text-orange-800">
+                <strong>Connection Issue:</strong> {error}. Changes may not be saved.
+              </AlertDescription>
+            </Alert>
+          )}
+          {saveStatus && (
+            <Alert className={saveStatus.type === 'success' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}>
+              <AlertTriangle className={`h-4 w-4 ${saveStatus.type === 'success' ? 'text-green-600' : 'text-red-600'}`} />
+              <AlertDescription className={saveStatus.type === 'success' ? 'text-green-800' : 'text-red-800'}>
+                {saveStatus.message}
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+      )}
+
+      <div className="px-4 py-8">
         <Tabs defaultValue="profile" className="space-y-6">
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="profile">Profile</TabsTrigger>
@@ -109,7 +222,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
               <div className="flex items-center gap-6 mb-6">
                 <Avatar className="w-20 h-20">
                   <AvatarFallback className="text-lg">
-                    {profile.firstName.charAt(0)}{profile.lastName.charAt(0)}
+                    {localProfile.firstName.charAt(0) || 'U'}{localProfile.lastName.charAt(0) || 'U'}
                   </AvatarFallback>
                 </Avatar>
                 <div className="space-y-2">
@@ -129,7 +242,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                   <Label htmlFor="firstName">First Name</Label>
                   <Input
                     id="firstName"
-                    value={profile.firstName}
+                    value={localProfile.firstName}
                     onChange={(e) => handleProfileUpdate('firstName', e.target.value)}
                   />
                 </div>
@@ -137,7 +250,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                   <Label htmlFor="lastName">Last Name</Label>
                   <Input
                     id="lastName"
-                    value={profile.lastName}
+                    value={localProfile.lastName}
                     onChange={(e) => handleProfileUpdate('lastName', e.target.value)}
                   />
                 </div>
@@ -148,7 +261,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                 <Input
                   id="email"
                   type="email"
-                  value={profile.email}
+                  value={localProfile.email}
                   onChange={(e) => handleProfileUpdate('email', e.target.value)}
                 />
               </div>
@@ -157,7 +270,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                 <Label htmlFor="phone">Phone Number</Label>
                 <Input
                   id="phone"
-                  value={profile.phone}
+                  value={localProfile.phone}
                   onChange={(e) => handleProfileUpdate('phone', e.target.value)}
                 />
               </div>
@@ -167,13 +280,14 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                 <Textarea
                   id="bio"
                   placeholder="Tell us about yourself and your mental health journey..."
-                  value={profile.bio}
+                  value={localProfile.bio}
                   onChange={(e) => handleProfileUpdate('bio', e.target.value)}
                   className="min-h-[100px]"
                 />
               </div>
 
-              <Button className="mt-6">
+              <Button className="mt-6" onClick={handleSaveProfile} disabled={saving}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Save Changes
               </Button>
             </Card>
@@ -190,7 +304,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                     <p className="text-sm text-muted-foreground">Get reminded to complete your daily mood check-ins</p>
                   </div>
                   <Switch
-                    checked={notifications.checkInReminders}
+                    checked={localPreferences.notifications.checkInReminders}
                     onCheckedChange={() => handleNotificationToggle('checkInReminders')}
                   />
                 </div>
@@ -203,7 +317,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                     <p className="text-sm text-muted-foreground">Receive notifications when the AI assistant responds</p>
                   </div>
                   <Switch
-                    checked={notifications.chatNotifications}
+                    checked={localPreferences.notifications.chatNotifications}
                     onCheckedChange={() => handleNotificationToggle('chatNotifications')}
                   />
                 </div>
@@ -216,7 +330,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                     <p className="text-sm text-muted-foreground">Get reminded about upcoming therapy appointments</p>
                   </div>
                   <Switch
-                    checked={notifications.appointmentReminders}
+                    checked={localPreferences.notifications.appointmentReminders}
                     onCheckedChange={() => handleNotificationToggle('appointmentReminders')}
                   />
                 </div>
@@ -229,7 +343,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                     <p className="text-sm text-muted-foreground">Receive weekly summaries of your mental health progress</p>
                   </div>
                   <Switch
-                    checked={notifications.weeklyReports}
+                    checked={localPreferences.notifications.weeklyReports}
                     onCheckedChange={() => handleNotificationToggle('weeklyReports')}
                   />
                 </div>
@@ -242,7 +356,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                     <p className="text-sm text-muted-foreground">Important safety notifications and crisis resources</p>
                   </div>
                   <Switch
-                    checked={notifications.emergencyAlerts}
+                    checked={localPreferences.notifications.emergencyAlerts}
                     onCheckedChange={() => handleNotificationToggle('emergencyAlerts')}
                   />
                 </div>
@@ -255,11 +369,16 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                     <p className="text-sm text-muted-foreground">Receive updates about new features and resources</p>
                   </div>
                   <Switch
-                    checked={notifications.marketingEmails}
+                    checked={localPreferences.notifications.marketingEmails}
                     onCheckedChange={() => handleNotificationToggle('marketingEmails')}
                   />
                 </div>
               </div>
+
+              <Button className="mt-6" onClick={handleSavePreferences} disabled={saving}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Save Notification Preferences
+              </Button>
             </Card>
           </TabsContent>
 
@@ -274,7 +393,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                     <p className="text-sm text-muted-foreground">Allow sharing anonymized data with healthcare partners</p>
                   </div>
                   <Switch
-                    checked={privacy.dataSharing}
+                    checked={localPreferences.privacy.dataSharing}
                     onCheckedChange={() => handlePrivacyToggle('dataSharing')}
                   />
                 </div>
@@ -287,7 +406,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                     <p className="text-sm text-muted-foreground">Contribute to mental health research (data anonymized)</p>
                   </div>
                   <Switch
-                    checked={privacy.anonymousResearch}
+                    checked={localPreferences.privacy.anonymousResearch}
                     onCheckedChange={() => handlePrivacyToggle('anonymousResearch')}
                   />
                 </div>
@@ -300,7 +419,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                     <p className="text-sm text-muted-foreground">Track your usage patterns to improve recommendations</p>
                   </div>
                   <Switch
-                    checked={privacy.activityTracking}
+                    checked={localPreferences.privacy.activityTracking}
                     onCheckedChange={() => handlePrivacyToggle('activityTracking')}
                   />
                 </div>
@@ -310,8 +429,11 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                 <div className="space-y-3">
                   <h4 className="font-medium">Profile Visibility</h4>
                   <Select
-                    value={privacy.profileVisibility}
-                    onValueChange={(value) => setPrivacy(prev => ({ ...prev, profileVisibility: value }))}
+                    value={localPreferences.privacy.profileVisibility}
+                    onValueChange={(value) => setLocalPreferences(prev => ({ 
+                      ...prev, 
+                      privacy: { ...prev.privacy, profileVisibility: value as 'private' | 'healthcare' | 'support' }
+                    }))}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -343,7 +465,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                 <div className="space-y-3">
                   <Label>Theme</Label>
                   <Select
-                    value={preferences.theme}
+                    value={localPreferences.theme}
                     onValueChange={(value) => handlePreferenceChange('theme', value)}
                   >
                     <SelectTrigger>
@@ -360,7 +482,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                 <div className="space-y-3">
                   <Label>Language</Label>
                   <Select
-                    value={preferences.language}
+                    value={localPreferences.language}
                     onValueChange={(value) => handlePreferenceChange('language', value)}
                   >
                     <SelectTrigger>
@@ -378,7 +500,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                 <div className="space-y-3">
                   <Label>Timezone</Label>
                   <Select
-                    value={preferences.timezone}
+                    value={localPreferences.timezone}
                     onValueChange={(value) => handlePreferenceChange('timezone', value)}
                   >
                     <SelectTrigger>
@@ -397,7 +519,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                   <Label>Daily Reminder Time</Label>
                   <Input
                     type="time"
-                    value={preferences.reminderTime}
+                    value={localPreferences.reminderTime}
                     onChange={(e) => handlePreferenceChange('reminderTime', e.target.value)}
                   />
                 </div>
@@ -405,7 +527,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                 <div className="space-y-3">
                   <Label>Weekly Report Day</Label>
                   <Select
-                    value={preferences.weeklyReportDay}
+                    value={localPreferences.weeklyReportDay}
                     onValueChange={(value) => handlePreferenceChange('weeklyReportDay', value)}
                   >
                     <SelectTrigger>
@@ -424,7 +546,8 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                 </div>
               </div>
 
-              <Button className="mt-6">
+              <Button className="mt-6" onClick={handleSavePreferences} disabled={saving}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Save Preferences
               </Button>
             </Card>
