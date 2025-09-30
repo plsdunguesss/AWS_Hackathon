@@ -16,6 +16,9 @@ const conversation_1 = require("./routes/conversation");
 const riskAssessment_1 = require("./routes/riskAssessment");
 const session_1 = require("./routes/session");
 const health_1 = require("./routes/health");
+const dashboard_1 = require("./routes/dashboard");
+const user_1 = require("./routes/user");
+const progressAnalytics_1 = require("./routes/progressAnalytics");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
 // Security middleware
@@ -46,6 +49,9 @@ app.use('/api/health', health_1.healthRoutes);
 app.use('/api/sessions', session_1.sessionRoutes);
 app.use('/api/conversation', conversation_1.conversationRoutes);
 app.use('/api/risk-assessment', riskAssessment_1.riskAssessmentRoutes);
+app.use('/api/dashboard', dashboard_1.dashboardRoutes);
+app.use('/api/user', user_1.userRoutes);
+app.use('/api/progress-analytics', progressAnalytics_1.progressAnalyticsRoutes);
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error('Error:', err);

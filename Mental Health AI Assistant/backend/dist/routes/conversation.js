@@ -12,7 +12,7 @@ const ollamaService_1 = require("../services/ollamaService");
 const router = express_1.default.Router();
 exports.conversationRoutes = router;
 const sessionService = sessionService_1.SessionService.getInstance();
-const conversationService = new conversationService_1.ConversationService();
+const conversationService = new conversationService_1.ConversationService(undefined, undefined, undefined, false); // Use Ollama
 // Validation middleware
 const validateMessage = [
     (0, express_validator_1.body)('sessionId').isUUID().withMessage('Valid session ID is required'),

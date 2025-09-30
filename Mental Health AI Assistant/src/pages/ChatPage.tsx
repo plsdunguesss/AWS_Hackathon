@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChatPage as ChatComponent } from '../components/ChatPage';
+import { ChatPageDirect as ChatComponent } from '../components/ChatPageDirect';
 import { Layout } from '../components/Layout';
 import { useNavigation } from '../contexts/NavigationContext';
 

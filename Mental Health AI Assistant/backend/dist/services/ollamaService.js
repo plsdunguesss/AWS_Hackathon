@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.OllamaService = void 0;
 const axios_1 = __importDefault(require("axios"));
 class OllamaService {
-    constructor(baseUrl = 'http://localhost:11434', model = 'llama2:7b', timeout = 30000) {
+    constructor(baseUrl = 'http://localhost:11434', model = 'llama2:latest', timeout = 30000) {
         this.baseUrl = baseUrl;
         this.model = model;
         this.timeout = timeout;

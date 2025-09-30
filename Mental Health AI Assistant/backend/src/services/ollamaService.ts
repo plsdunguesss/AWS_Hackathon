@@ -8,7 +8,7 @@ export class OllamaService {
 
     constructor(
         baseUrl: string = 'http://localhost:11434',
-        model: string = 'llama2:7b',
+        model: string = 'llama2:latest',
         timeout: number = 30000
     ) {
         this.baseUrl = baseUrl;

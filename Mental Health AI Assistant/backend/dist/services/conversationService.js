@@ -6,7 +6,7 @@ const huggingFaceService_1 = require("./huggingFaceService");
 const safetyMonitorService_1 = require("./safetyMonitorService");
 const promptTemplates_1 = require("./promptTemplates");
 class ConversationService {
-    constructor(ollamaService, safetyMonitor, huggingFaceService, useHuggingFace = true) {
+    constructor(ollamaService, safetyMonitor, huggingFaceService, useHuggingFace = false) {
         this.ollamaService = ollamaService || new ollamaService_1.OllamaService();
         this.huggingFaceService = huggingFaceService || new huggingFaceService_1.HuggingFaceService();
         this.safetyMonitor = safetyMonitor || new safetyMonitorService_1.SafetyMonitorService();

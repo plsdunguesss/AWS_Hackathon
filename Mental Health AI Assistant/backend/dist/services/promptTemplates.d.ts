@@ -1,41 +1,19 @@
-/**
- * Prompt templates for empathetic counseling responses
- * These templates incorporate evidence-based counseling techniques
- */
-export interface PromptTemplate {
-    name: string;
-    description: string;
+interface PromptTemplate {
     systemPrompt: string;
     techniques: string[];
+    riskLevel: 'low' | 'medium' | 'high' | 'crisis';
+}
+interface TemplateContext {
+    messageContent: string;
+    riskLevel: number;
+    sessionLength: number;
+    userGoals?: string[];
 }
 export declare class PromptTemplateService {
     private templates;
-    constructor();
-    /**
-     * Get a specific prompt template by name
-     */
-    getTemplate(name: string): PromptTemplate | undefined;
-    /**
-     * Get all available templates
-     */
-    getAllTemplates(): PromptTemplate[];
-    /**
-     * Select appropriate template based on conversation context
-     */
-    selectTemplate(context: {
-        messageContent: string;
-        riskLevel: number;
-        sessionLength: number;
-        userGoals?: string[];
-    }): PromptTemplate;
-    /**
-     * Initialize all prompt templates
-     */
-    private initializeTemplates;
-    private containsEmotionalContent;
-    private containsAnxietyContent;
-    private containsDepressionContent;
-    private containsCopingContent;
-    private containsRelationshipContent;
+    selectTemplate(context: TemplateContext): PromptTemplate;
+    getWelcomePrompt(): string;
+    getCrisisPrompt(): string;
 }
+export {};
 //# sourceMappingURL=promptTemplates.d.ts.map

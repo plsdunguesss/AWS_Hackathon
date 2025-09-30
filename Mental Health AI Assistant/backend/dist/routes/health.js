@@ -16,9 +16,16 @@ router.get('/', async (req, res) => {
         const ollamaService = new ollamaService_1.OllamaService();
         // Check database connection
         await db.get('SELECT 1');
-        // Check Ollama service
-        const ollamaHealthy = await ollamaService.checkHealth();
-        const availableModels = await ollamaService.listModels();
+        // Check Ollama service (optional for demo)
+        let ollamaHealthy = false;
+        let availableModels = [];
+        try {
+            ollamaHealthy = await ollamaService.checkHealth();
+            availableModels = await ollamaService.listModels();
+        }
+        catch (error) {
+            console.log('Ollama not available (optional for demo)');
+        }
         res.json({
             status: 'healthy',
             timestamp: new Date().toISOString(),
@@ -47,10 +54,18 @@ router.get('/status', async (req, res) => {
         const sessionCount = await db.get('SELECT COUNT(*) as count FROM sessions');
         const messageCount = await db.get('SELECT COUNT(*) as count FROM messages');
         const riskAssessmentCount = await db.get('SELECT COUNT(*) as count FROM risk_assessments');
-        // Check Ollama
-        const ollamaHealthy = await ollamaService.checkHealth();
-        const availableModels = await ollamaService.listModels();
-        const currentModel = ollamaService.getModel();
+        // Check Ollama (optional for demo)
+        let ollamaHealthy = false;
+        let availableModels = [];
+        let currentModel = 'Not available';
+        try {
+            ollamaHealthy = await ollamaService.checkHealth();
+            availableModels = await ollamaService.listModels();
+            currentModel = ollamaService.getModel();
+        }
+        catch (error) {
+            console.log('Ollama not available (optional for demo)');
+        }
         res.json({
             status: 'healthy',
             timestamp: new Date().toISOString(),

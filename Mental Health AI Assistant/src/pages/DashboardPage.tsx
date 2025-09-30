@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DashboardPage as DashboardComponent } from '../components/DashboardPage';
+import { DashboardPageSimple as DashboardComponent } from '../components/DashboardPageSimple';
 import { Layout } from '../components/Layout';
 import { useNavigation } from '../contexts/NavigationContext';
 

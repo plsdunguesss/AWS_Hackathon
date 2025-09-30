@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SessionService = void 0;
 const uuid_1 = require("uuid");
 const database_1 = require("../database/database");
+const dashboardService_1 = require("./dashboardService");
 class SessionService {
     constructor() {
         this.db = database_1.Database.getInstance();
@@ -24,6 +25,15 @@ class SessionService {
         const session = await this.db.get('SELECT * FROM sessions WHERE id = ?', [sessionId]);
         if (!session) {
             throw new Error('Failed to create session');
+        }
+        // Initialize default tasks for the new session
+        try {
+            const dashboardService = dashboardService_1.DashboardService.getInstance();
+            await dashboardService.initializeDefaultTasks(sessionId);
+        }
+        catch (error) {
+            console.warn('Failed to initialize default tasks for session:', sessionId, error);
+            // Don't fail session creation if task initialization fails
         }
         return this.mapSessionFromDb(session);
     }

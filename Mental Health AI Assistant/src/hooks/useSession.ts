@@ -12,6 +12,9 @@ export function useSession() {
   });
 
   const initializeSession = useCallback(async () => {
+    // Prevent multiple simultaneous session creation
+    if (loading || session) return;
+    
     try {
       setLoading(true);
       clearError();
@@ -21,11 +24,15 @@ export function useSession() {
       
       if (existingSessionId) {
         // Try to retrieve existing session
-        const response = await apiService.getSession(existingSessionId);
-        if (response.success && response.data?.session) {
-          setSession(response.data.session);
-          setLoading(false);
-          return;
+        try {
+          const response = await apiService.getSession(existingSessionId);
+          if (response.success && response.data?.session) {
+            setSession(response.data.session);
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.log('Existing session not found, creating new one');
         }
         // If session doesn't exist, remove from localStorage
         localStorage.removeItem('mindcare_session_id');
@@ -45,7 +52,7 @@ export function useSession() {
     } finally {
       setLoading(false);
     }
-  }, [handleError, clearError]);
+  }, [handleError, clearError, loading, session]);
 
   const retryInitialization = useCallback(async () => {
     const success = await retry(initializeSession);

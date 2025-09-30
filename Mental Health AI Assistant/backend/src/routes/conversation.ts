@@ -7,7 +7,7 @@ import { Message, ConversationContext } from '../types';
 
 const router = express.Router();
 const sessionService = SessionService.getInstance();
-const conversationService = new ConversationService();
+const conversationService = new ConversationService(undefined, undefined, undefined, false); // Use Ollama
 
 // Validation middleware
 const validateMessage = [
@@ -173,6 +173,36 @@ router.get('/test-ollama', async (req: express.Request, res: express.Response) =
         res.status(500).json({
             success: false,
             error: 'Failed to test Ollama connection'
+        });
+    }
+});
+
+// Simple test endpoint without validation
+router.post('/test-message', async (req: express.Request, res: express.Response) => {
+    try {
+        const { message } = req.body;
+        const testMessage = message || "Hello, this is a test";
+        
+        // Create a temporary session
+        const tempSession = await sessionService.createSession();
+        const context = await sessionService.getConversationContext(tempSession.id);
+        
+        // Process message with AI
+        const aiResponse = await conversationService.processMessage(tempSession.id, testMessage, context);
+        
+        res.json({
+            success: true,
+            message: testMessage,
+            aiResponse: aiResponse.content,
+            empathyScore: aiResponse.empathyScore,
+            riskLevel: aiResponse.riskAssessment.overallRisk
+        });
+        
+    } catch (error) {
+        console.error('Test message error:', error);
+        res.status(500).json({
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
         });
     }
 });

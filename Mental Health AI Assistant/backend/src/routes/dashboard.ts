@@ -52,7 +52,7 @@ router.post('/mood/entry',
     body('notes').optional().isString().isLength({ max: 500 }).withMessage('Notes must be less than 500 characters')
   ],
   handleValidationErrors,
-  async (req, res) => {
+  async (req: express.Request, res: express.Response) => {
     try {
       const { sessionId, mood, energy, stress, anxiety, sleep, notes } = req.body;
       

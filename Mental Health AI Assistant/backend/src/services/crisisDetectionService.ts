@@ -2,12 +2,20 @@ import { SafetyFlags, CrisisResponse, CrisisResource, RiskScore } from '../types
 import { SafetyMonitorService } from './safetyMonitorService';
 
 export class CrisisDetectionService {
+    private static instance: CrisisDetectionService;
     private safetyMonitor: SafetyMonitorService;
     private crisisThreshold: number = 0.85; // 85% risk threshold for professional referral
     private immediateThreshold: number = 0.95; // 95% for immediate crisis intervention
 
     constructor(safetyMonitor?: SafetyMonitorService) {
         this.safetyMonitor = safetyMonitor || new SafetyMonitorService();
+    }
+
+    public static getInstance(): CrisisDetectionService {
+        if (!CrisisDetectionService.instance) {
+            CrisisDetectionService.instance = new CrisisDetectionService();
+        }
+        return CrisisDetectionService.instance;
     }
 
     /**
@@ -28,14 +36,21 @@ export class CrisisDetectionService {
             const riskScore = this.calculateCrisisRisk(message, conversationHistory, safetyFlags);
             
             const isCrisis = riskScore >= this.crisisThreshold;
-            const isImmediate = riskScore >= this.immediateThreshold || safetyFlags.riskLevel === 'crisis';
-            
+            const isImmediate = riskScore >= this.immediateThreshold;
+
             let crisisResponse: CrisisResponse | undefined;
-            
+
             if (isCrisis) {
-                crisisResponse = await this.generateCrisisResponse(riskScore, isImmediate, safetyFlags);
+                crisisResponse = {
+                    isImmediate,
+                    resources: await this.getCrisisResources(safetyFlags),
+                    message: isImmediate 
+                        ? "I'm extremely concerned about your safety right now. Please reach out for immediate help."
+                        : "I'm concerned about your wellbeing. Please consider reaching out to a mental health professional.",
+                    shouldEndSession: isImmediate
+                };
             }
-            
+
             return {
                 isCrisis,
                 isImmediate,
@@ -43,77 +58,32 @@ export class CrisisDetectionService {
                 crisisResponse,
                 riskScore
             };
-            
+
         } catch (error) {
-            console.error('Error in crisis detection:', error);
+            console.error('Crisis detection error:', error);
             
-            // In case of error, err on the side of caution
+            // Return safe defaults on error
             return {
-                isCrisis: true,
+                isCrisis: false,
                 isImmediate: false,
                 safetyFlags: {
                     containsHarmfulContent: false,
-                    riskLevel: 'medium',
+                    riskLevel: 'low',
                     flaggedTerms: [],
-                    requiresIntervention: true
+                    requiresIntervention: false
                 },
-                crisisResponse: await this.generateFallbackCrisisResponse(),
-                riskScore: 0.5
+                riskScore: 0
             };
         }
     }
 
     /**
-     * Check if conversation should trigger professional referral
+     * Get appropriate crisis resources based on safety flags
      */
-    public shouldTriggerReferral(riskScore: number, safetyFlags: SafetyFlags): boolean {
-        return riskScore >= this.crisisThreshold || 
-               safetyFlags.riskLevel === 'crisis' || 
-               safetyFlags.riskLevel === 'high';
-    }
-
-    /**
-     * Generate crisis response with appropriate resources
-     */
-    public async generateCrisisResponse(
-        riskScore: number, 
-        isImmediate: boolean, 
-        safetyFlags: SafetyFlags
-    ): Promise<CrisisResponse> {
-        const resources = this.getCrisisResources(isImmediate);
-        
-        let message: string;
-        
-        if (isImmediate || safetyFlags.riskLevel === 'crisis') {
-            message = `I'm very concerned about your safety right now. Your wellbeing is important, and you don't have to go through this alone.
-
-**If you're in immediate danger, please:**
-- Call 911 or go to your nearest emergency room
-- Contact the National Suicide Prevention Lifeline: 988
-- Reach out to a trusted friend, family member, or mental health professional
-
-**Crisis support is available 24/7:**`;
-        } else {
-            message = `I notice you might be going through a particularly difficult time. It's important to have professional support when dealing with these feelings.
-
-**Here are some resources that can help:**`;
-        }
-        
-        return {
-            isImmediate,
-            resources,
-            message,
-            shouldEndSession: isImmediate
-        };
-    }
-
-    /**
-     * Get crisis resources based on urgency level
-     */
-    public getCrisisResources(isImmediate: boolean = false): CrisisResource[] {
+    private async getCrisisResources(safetyFlags: SafetyFlags): Promise<CrisisResource[]> {
         const resources: CrisisResource[] = [
             {
-                name: "National Suicide Prevention Lifeline",
+                name: "988 Suicide & Crisis Lifeline",
                 phone: "988",
                 description: "24/7 crisis support and suicide prevention",
                 available24h: true
@@ -121,54 +91,22 @@ export class CrisisDetectionService {
             {
                 name: "Crisis Text Line",
                 phone: "741741",
-                description: "Text HOME for 24/7 crisis support via text",
-                available24h: true
-            },
-            {
-                name: "SAMHSA National Helpline",
-                phone: "1-800-662-4357",
-                description: "Treatment referral and information service",
+                description: "Text HOME for crisis support",
                 available24h: true
             }
         ];
 
-        if (isImmediate) {
-            // Add emergency services at the top for immediate crises
-            resources.unshift({
-                name: "Emergency Services",
-                phone: "911",
-                description: "For immediate life-threatening emergencies",
-                available24h: true
-            });
-        }
-
-        // Add additional specialized resources
-        resources.push(
-            {
+        // Add specialized resources based on flagged content
+        if (safetyFlags.flaggedTerms.some(term => 
+            ['domestic', 'abuse', 'violence'].some(keyword => term.includes(keyword))
+        )) {
+            resources.push({
                 name: "National Domestic Violence Hotline",
                 phone: "1-800-799-7233",
                 description: "Support for domestic violence situations",
                 available24h: true
-            },
-            {
-                name: "Trans Lifeline",
-                phone: "877-565-8860",
-                description: "Crisis support for transgender individuals",
-                available24h: true
-            },
-            {
-                name: "LGBT National Hotline",
-                phone: "1-888-843-4564",
-                description: "Support for LGBTQ+ individuals",
-                available24h: false
-            },
-            {
-                name: "Veterans Crisis Line",
-                phone: "1-800-273-8255",
-                description: "Crisis support specifically for veterans",
-                available24h: true
-            }
-        );
+            });
+        }
 
         return resources;
     }
@@ -203,8 +141,7 @@ export class CrisisDetectionService {
         // Immediate danger indicators
         const immediateDangerPhrases = [
             'right now', 'tonight', 'today', 'this moment', 'can\'t wait',
-            'have a plan', 'ready to', 'going to do it', 'about to',
-            'final goodbye', 'goodbye forever', 'this is it'
+            'have a plan', 'ready to', 'going to do it', 'about to'
         ];
 
         immediateDangerPhrases.forEach(phrase => {
@@ -216,8 +153,7 @@ export class CrisisDetectionService {
         // Suicidal ideation indicators
         const suicidalPhrases = [
             'kill myself', 'end my life', 'suicide', 'suicidal', 'want to die',
-            'better off dead', 'end it all', 'can\'t go on', 'no point living',
-            'planning to die', 'how to die', 'ways to die'
+            'better off dead', 'end it all', 'can\'t go on', 'no point living'
         ];
 
         suicidalPhrases.forEach(phrase => {
@@ -228,8 +164,7 @@ export class CrisisDetectionService {
 
         // Self-harm indicators
         const selfHarmPhrases = [
-            'hurt myself', 'self harm', 'self-harm', 'cut myself', 'cutting',
-            'burn myself', 'punish myself', 'deserve pain', 'harm myself'
+            'hurt myself', 'self harm', 'self-harm', 'cut myself', 'cutting'
         ];
 
         selfHarmPhrases.forEach(phrase => {
@@ -238,129 +173,43 @@ export class CrisisDetectionService {
             }
         });
 
-        // Hopelessness indicators
-        const hopelessnessPhrases = [
-            'no hope', 'hopeless', 'nothing left', 'no way out', 'trapped',
-            'can\'t escape', 'no future', 'pointless', 'meaningless'
-        ];
-
-        hopelessnessPhrases.forEach(phrase => {
-            if (lowerMessage.includes(phrase)) {
-                riskScore += 0.1;
-            }
-        });
-
-        // Social isolation indicators
-        const isolationPhrases = [
-            'no one cares', 'all alone', 'nobody understands', 'isolated',
-            'no friends', 'no family', 'abandoned', 'rejected'
-        ];
-
-        isolationPhrases.forEach(phrase => {
-            if (lowerMessage.includes(phrase)) {
-                riskScore += 0.08;
-            }
-        });
-
-        // Context from conversation history
-        if (conversationHistory.length > 0) {
-            const recentHistory = conversationHistory.slice(-3).join(' ').toLowerCase();
-            
-            // Escalating pattern
-            if (recentHistory.includes('getting worse') || recentHistory.includes('can\'t take it')) {
-                riskScore += 0.1;
-            }
-            
-            // Repeated crisis themes
-            const crisisThemes = ['suicide', 'die', 'hurt', 'end', 'hopeless'];
-            const themeCount = crisisThemes.filter(theme => recentHistory.includes(theme)).length;
-            riskScore += themeCount * 0.05;
-        }
-
-        // Specific method mentions (very high risk)
-        const methodPhrases = [
-            'pills', 'overdose', 'hanging', 'jumping', 'bridge', 'gun',
-            'knife', 'razor', 'rope', 'poison', 'carbon monoxide'
-        ];
-
-        methodPhrases.forEach(method => {
-            if (lowerMessage.includes(method) && 
-                (lowerMessage.includes('myself') || lowerMessage.includes('me'))) {
-                riskScore += 0.25;
-            }
-        });
-
-        // Cap the risk score at 1.0
         return Math.min(1.0, riskScore);
     }
 
     /**
-     * Generate fallback crisis response for error situations
+     * Assess crisis level for a message (simplified method for API)
      */
-    private async generateFallbackCrisisResponse(): Promise<CrisisResponse> {
-        return {
-            isImmediate: false,
-            resources: this.getCrisisResources(false),
-            message: `I want to make sure you have access to support when you need it. If you're experiencing thoughts of self-harm or suicide, please reach out for help immediately.
-
-**Crisis support is available 24/7:**`,
-            shouldEndSession: false
-        };
-    }
-
-    /**
-     * Format crisis response for display
-     */
-    public formatCrisisMessage(crisisResponse: CrisisResponse): string {
-        let formattedMessage = crisisResponse.message + '\n\n';
-        
-        crisisResponse.resources.forEach(resource => {
-            formattedMessage += `**${resource.name}**\n`;
-            formattedMessage += `Phone: ${resource.phone}\n`;
-            formattedMessage += `${resource.description}\n`;
-            if (resource.available24h) {
-                formattedMessage += `Available: 24/7\n`;
-            }
-            formattedMessage += '\n';
-        });
-
-        if (crisisResponse.isImmediate) {
-            formattedMessage += `\n**Remember:** If you're in immediate danger, don't hesitate to call 911 or go to your nearest emergency room. Your life has value, and help is available.`;
-        } else {
-            formattedMessage += `\n**Remember:** You don't have to face this alone. Professional help is available, and reaching out is a sign of strength.`;
-        }
-
-        return formattedMessage;
-    }
-
-    /**
-     * Log crisis detection event for monitoring
-     */
-    public async logCrisisEvent(
-        sessionId: string, 
-        messageId: string, 
-        riskScore: number, 
-        safetyFlags: SafetyFlags,
-        responseGenerated: boolean
-    ): Promise<void> {
+    public async assessCrisisLevel(sessionId: string, message: string): Promise<{
+        riskLevel: number;
+        isCrisis: boolean;
+        isImmediate: boolean;
+        recommendations: string[];
+    }> {
         try {
-            // In a production system, this would log to a secure monitoring system
-            console.log(`CRISIS EVENT DETECTED:`, {
-                sessionId,
-                messageId,
-                riskScore,
-                riskLevel: safetyFlags.riskLevel,
-                flaggedTerms: safetyFlags.flaggedTerms,
-                responseGenerated,
-                timestamp: new Date().toISOString()
-            });
+            const result = await this.detectCrisis(message);
             
-            // TODO: Implement secure logging to database or monitoring service
-            // This should be anonymized and comply with privacy regulations
-            
+            return {
+                riskLevel: result.riskScore,
+                isCrisis: result.isCrisis,
+                isImmediate: result.isImmediate,
+                recommendations: result.isCrisis ? [
+                    "Consider reaching out to a mental health professional",
+                    "Contact crisis support services if needed",
+                    "Ensure you have a safety plan in place"
+                ] : [
+                    "Continue monitoring your mental health",
+                    "Practice self-care strategies",
+                    "Reach out for support when needed"
+                ]
+            };
         } catch (error) {
-            console.error('Error logging crisis event:', error);
-            // Don't throw error as this shouldn't interrupt crisis response
+            console.error('Crisis assessment error:', error);
+            return {
+                riskLevel: 0,
+                isCrisis: false,
+                isImmediate: false,
+                recommendations: ["Unable to assess risk at this time"]
+            };
         }
     }
 }

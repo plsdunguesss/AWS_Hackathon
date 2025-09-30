@@ -15,7 +15,7 @@ export class ConversationService {
         ollamaService?: OllamaService, 
         safetyMonitor?: SafetyMonitorService,
         huggingFaceService?: HuggingFaceService,
-        useHuggingFace: boolean = true
+        useHuggingFace: boolean = false
     ) {
         this.ollamaService = ollamaService || new OllamaService();
         this.huggingFaceService = huggingFaceService || new HuggingFaceService();
