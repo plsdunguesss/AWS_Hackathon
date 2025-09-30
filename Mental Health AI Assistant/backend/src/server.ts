@@ -14,6 +14,7 @@ import { sessionRoutes } from './routes/session';
 import { healthRoutes } from './routes/health';
 import { dashboardRoutes } from './routes/dashboard';
 import { userRoutes } from './routes/user';
+import { progressAnalyticsRoutes } from './routes/progressAnalytics';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -52,6 +53,7 @@ app.use('/api/conversation', conversationRoutes);
 app.use('/api/risk-assessment', riskAssessmentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/progress-analytics', progressAnalyticsRoutes);
 
 // Error handling middleware
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {

@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { HeroSection } from '../components/HeroSection';
+import { UXEnhancements } from '../components/ui/ux-enhancements';
+import { SafetyMonitor } from '../components/ui/safety-monitor';
 import { useNavigation } from '../contexts/NavigationContext';
 
 export function HomePage() {
@@ -51,6 +53,20 @@ export function HomePage() {
         onLearnMore={() => navigate('/learn-more')}
         onViewDashboard={() => navigate('/dashboard')}
       />
+      
+      {/* Safety monitoring for critical issues */}
+      <div className="container mx-auto px-4 py-6">
+        <SafetyMonitor />
+        
+        {/* UX enhancements for better user experience */}
+        <div className="mt-8">
+          <UXEnhancements 
+            showSuggestions={true}
+            showQuickActions={true}
+            showProgressIndicator={true}
+          />
+        </div>
+      </div>
     </>
   );
 }

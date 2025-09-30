@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { apiService, AnalyticsData, ProgressMetrics, MoodEntry, Achievement } from '../services/api';
+import { apiService, AnalyticsData, ProgressMetrics, MoodEntry, Achievement, AdvancedAnalytics } from '../services/api';
 
 export function useProgress(sessionId: string | null) {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [advancedAnalytics, setAdvancedAnalytics] = useState<AdvancedAnalytics | null>(null);
   const [metrics, setMetrics] = useState<ProgressMetrics | null>(null);
   const [moodHistory, setMoodHistory] = useState<MoodEntry[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
@@ -17,9 +18,10 @@ export function useProgress(sessionId: string | null) {
       setLoading(true);
       setError(null);
 
-      // Load analytics, mood history, and achievements in parallel
-      const [analyticsResponse, moodResponse, achievementsResponse] = await Promise.all([
+      // Load analytics, advanced analytics, mood history, and achievements in parallel
+      const [analyticsResponse, advancedAnalyticsResponse, moodResponse, achievementsResponse] = await Promise.all([
         apiService.getProgressAnalytics(sessionId, range),
+        apiService.getAdvancedAnalytics(sessionId, range),
         apiService.getMoodHistory(sessionId, range === '7d' ? 7 : range === '30d' ? 30 : 90),
         apiService.getAchievements(sessionId)
       ]);
@@ -29,6 +31,12 @@ export function useProgress(sessionId: string | null) {
         setMetrics(analyticsResponse.data.metrics);
       } else {
         console.warn('Failed to load analytics:', analyticsResponse.error);
+      }
+
+      if (advancedAnalyticsResponse.success && advancedAnalyticsResponse.data) {
+        setAdvancedAnalytics(advancedAnalyticsResponse.data);
+      } else {
+        console.warn('Failed to load advanced analytics:', advancedAnalyticsResponse.error);
       }
 
       if (moodResponse.success && moodResponse.data) {
@@ -44,7 +52,7 @@ export function useProgress(sessionId: string | null) {
       }
 
       // Only set error if all requests failed
-      if (!analyticsResponse.success && !moodResponse.success && !achievementsResponse.success) {
+      if (!analyticsResponse.success && !advancedAnalyticsResponse.success && !moodResponse.success && !achievementsResponse.success) {
         setError('Failed to load progress data');
       }
     } catch (err) {
@@ -98,6 +106,18 @@ export function useProgress(sessionId: string | null) {
   };
 
   const getInsights = () => {
+    // Use advanced analytics insights if available
+    if (advancedAnalytics?.visualizationData?.insights && advancedAnalytics.visualizationData.insights.length > 0) {
+      return advancedAnalytics.patterns.slice(0, 3).map(pattern => ({
+        type: pattern.type === 'trend' && pattern.confidence > 0.7 ? 'positive' : 'neutral',
+        title: pattern.title,
+        description: pattern.description,
+        metric: pattern.confidence > 0.8 ? 'High Confidence' : pattern.confidence > 0.6 ? 'Medium Confidence' : 'Low Confidence',
+        icon: pattern.type === 'trend' ? 'TrendingUp' : pattern.type === 'cycle' ? 'BarChart3' : 'TrendingDown',
+        color: pattern.confidence > 0.7 ? 'text-green-600' : 'text-blue-600'
+      }));
+    }
+
     // Use backend analytics insights if available
     if (analytics?.patterns && analytics.patterns.length > 0) {
       return analytics.patterns.map(pattern => ({
@@ -159,6 +179,7 @@ export function useProgress(sessionId: string | null) {
 
   return {
     analytics,
+    advancedAnalytics,
     metrics,
     moodHistory,
     achievements,

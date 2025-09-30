@@ -6,6 +6,13 @@ export interface BreadcrumbItem {
   path: string;
 }
 
+export interface NavigationFlow {
+  current: string;
+  next: string[];
+  prev: string | null;
+  title: string;
+}
+
 interface NavigationContextType {
   breadcrumbs: BreadcrumbItem[];
   setBreadcrumbs: (breadcrumbs: BreadcrumbItem[]) => void;
@@ -14,12 +21,15 @@ interface NavigationContextType {
   canGoBack: boolean;
   setNavigationData: (data: any) => void;
   getNavigationData: () => any;
+  navigationFlow: NavigationFlow | null;
+  setNavigationFlow: (flow: NavigationFlow) => void;
 }
 
 const NavigationContext = createContext<NavigationContextType | undefined>(undefined);
 
 export function NavigationProvider({ children }: { children: ReactNode }) {
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([]);
+  const [navigationFlow, setNavigationFlow] = useState<NavigationFlow | null>(null);
 
   const addBreadcrumb = (item: BreadcrumbItem) => {
     setBreadcrumbs(prev => [...prev, item]);
@@ -33,10 +43,13 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
       if (previousPath) {
         window.history.pushState(null, '', previousPath);
       }
+    } else if (navigationFlow?.prev) {
+      // Use navigation flow if available
+      window.history.pushState(null, '', navigationFlow.prev);
     }
   };
 
-  const canGoBack = breadcrumbs.length > 1;
+  const canGoBack = breadcrumbs.length > 1 || !!navigationFlow?.prev;
 
   const setNavigationData = (data: any) => {
     const currentPath = window.location.pathname;
@@ -56,7 +69,9 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
       goBack,
       canGoBack,
       setNavigationData,
-      getNavigationData
+      getNavigationData,
+      navigationFlow,
+      setNavigationFlow
     }}>
       {children}
     </NavigationContext.Provider>

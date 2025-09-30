@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Bot, User, AlertTriangle, Heart, Clock, Mic, MicOff, MoreHorizontal, Wifi, WifiOff } from "lucide-react";
+import { Send, Bot, User, AlertTriangle, Heart, Clock, Mic, MicOff, MoreHorizontal, Wifi, WifiOff, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
@@ -9,7 +9,10 @@ import { ScrollArea } from "./ui/scroll-area";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Separator } from "./ui/separator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
+import { ErrorAlert } from "./ui/error-alert";
 import { useSession } from "../hooks/useSession";
+import { useErrorHandler } from "../hooks/useErrorHandler";
+import { useToast } from "./ui/toast";
 import { apiService, RiskScore } from "../services/api";
 
 interface ChatPageProps {
@@ -722,17 +725,45 @@ export function ChatPage({ onBack }: ChatPageProps) {
   // Show error state if session failed to initialize
   if (sessionError || !session) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center max-w-md mx-auto px-4">
-          <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-red-500" />
-          <h2 className="text-lg font-medium mb-2">Connection Error</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            {sessionError || 'Unable to connect to MindCare AI. Please check that the backend server is running.'}
-          </p>
-          <Button onClick={onBack} variant="outline">
-            Go Back
-          </Button>
-        </div>
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="max-w-md w-full p-6">
+          <div className="text-center">
+            <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-red-500" />
+            <h2 className="text-xl font-semibold mb-2">Unable to Start Chat</h2>
+            <p className="text-muted-foreground mb-6">
+              We're having trouble connecting to the chat service. Your safety is our priority.
+            </p>
+
+            <Alert className="mb-6 text-left">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>If you're in crisis:</strong> Please contact emergency services (911) 
+                or call the 988 Suicide & Crisis Lifeline immediately.
+              </AlertDescription>
+            </Alert>
+
+            <div className="space-y-3">
+              <Button onClick={() => window.location.reload()} className="w-full">
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Try Again
+              </Button>
+              <Button variant="outline" onClick={onBack} className="w-full">
+                Go Back
+              </Button>
+            </div>
+
+            {sessionError && (
+              <details className="mt-4 text-left">
+                <summary className="cursor-pointer text-sm text-muted-foreground">
+                  Error Details
+                </summary>
+                <p className="mt-2 text-xs bg-muted p-2 rounded">
+                  {sessionError}
+                </p>
+              </details>
+            )}
+          </div>
+        </Card>
       </div>
     );
   }

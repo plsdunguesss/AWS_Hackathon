@@ -1,19 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { apiService, Session } from '../services/api';
+import { useErrorHandler } from './useErrorHandler';
+import { useOffline } from './useOffline';
 
 export function useSession() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { handleError, errorState, clearError, retry } = useErrorHandler({
+    showToast: false, // Don't show toast for session errors
+    maxRetries: 3,
+  });
 
-  useEffect(() => {
-    initializeSession();
-  }, []);
-
-  const initializeSession = async () => {
+  const initializeSession = useCallback(async () => {
     try {
       setLoading(true);
-      setError(null);
+      clearError();
 
       // Check if we have a session ID in localStorage
       const existingSessionId = localStorage.getItem('mindcare_session_id');
@@ -36,26 +37,51 @@ export function useSession() {
         setSession(response.data.session);
         localStorage.setItem('mindcare_session_id', response.data.session.id);
       } else {
-        setError(response.error || 'Failed to create session');
+        handleError(response.error || 'Failed to create session', 'api');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to initialize session');
+      const errorType = !navigator.onLine ? 'offline' : 'network';
+      handleError(err instanceof Error ? err.message : 'Failed to initialize session', errorType);
     } finally {
       setLoading(false);
     }
-  };
+  }, [handleError, clearError]);
 
-  const clearSession = () => {
+  const retryInitialization = useCallback(async () => {
+    const success = await retry(initializeSession);
+    return success;
+  }, [retry, initializeSession]);
+
+  const clearSession = useCallback(() => {
     localStorage.removeItem('mindcare_session_id');
     setSession(null);
-    setError(null);
-  };
+    clearError();
+  }, [clearError]);
+
+  // Auto-retry session initialization on network reconnection
+  useEffect(() => {
+    const handleOnline = () => {
+      if (!session && !loading) {
+        initializeSession();
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [session, loading, initializeSession]);
+
+  useEffect(() => {
+    initializeSession();
+  }, [initializeSession]);
 
   return {
     session,
     loading,
-    error,
+    error: errorState.error,
+    errorType: errorState.type,
     initializeSession,
+    retryInitialization,
     clearSession,
+    canRetry: errorState.retryCount < 3,
   };
 }

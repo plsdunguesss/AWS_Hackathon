@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { apiService, Activity, Achievement, MoodEntry, ProgressMetrics } from '../services/api';
+import { useErrorHandler } from './useErrorHandler';
+import { useOffline, useOfflineQueue } from './useOffline';
+import { useToast } from '../components/ui/toast';
 
 interface UpcomingTask {
   id: string;
@@ -18,32 +21,98 @@ interface DashboardData {
   progressMetrics: ProgressMetrics;
 }
 
+interface QueuedMoodEntry {
+  type: 'mood';
+  sessionId: string;
+  data: {
+    mood: number;
+    energy: number;
+    stress: number;
+    anxiety: number;
+    sleep: number;
+    notes?: string;
+  };
+}
+
+interface QueuedActivity {
+  type: 'activity';
+  sessionId: string;
+  data: {
+    type: Activity['type'];
+    title: string;
+    description: string;
+    metadata?: Record<string, any>;
+  };
+}
+
+type QueuedItem = QueuedMoodEntry | QueuedActivity;
+
 export function useDashboard(sessionId: string | null) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { addToast } = useToast();
+  
+  const { handleError, errorState, clearError, retry } = useErrorHandler({
+    showToast: true,
+    maxRetries: 3,
+  });
 
-  const loadDashboardData = async () => {
-    if (!sessionId) return;
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await apiService.getDashboardData(sessionId);
-      if (response.success && response.data) {
-        setData(response.data);
-      } else {
-        setError(response.error || 'Failed to load dashboard data');
+  // Offline queue for mood entries and activities
+  const { addToQueue, queueSize } = useOfflineQueue<QueuedItem>(
+    async (item) => {
+      if (item.type === 'mood') {
+        await apiService.submitMoodEntry(item.sessionId, item.data);
+      } else if (item.type === 'activity') {
+        await apiService.logActivity(item.sessionId, item.data);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    'dashboard_queue'
+  );
 
-  const submitMoodEntry = async (moodData: {
+  // Use offline support for dashboard data
+  const {
+    data: offlineData,
+    loading: offlineLoading,
+    error: offlineError,
+    isStale,
+    retry: retryOffline,
+  } = useOffline(
+    async () => {
+      if (!sessionId) throw new Error('No session ID');
+      const response = await apiService.getDashboardData(sessionId);
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to load dashboard data');
+      }
+      return response.data;
+    },
+    {
+      storageKey: `dashboard_${sessionId}`,
+      maxAge: 5 * 60 * 1000, // 5 minutes
+      syncOnReconnect: true,
+    }
+  );
+
+  // Update local state when offline data changes
+  useEffect(() => {
+    if (offlineData) {
+      setData(offlineData);
+    }
+    setLoading(offlineLoading);
+    
+    if (offlineError) {
+      const errorType = !navigator.onLine ? 'offline' : 'network';
+      handleError(offlineError, errorType);
+    } else {
+      clearError();
+    }
+  }, [offlineData, offlineLoading, offlineError, handleError, clearError]);
+
+  const loadDashboardData = useCallback(async () => {
+    if (!sessionId) return;
+    await retryOffline();
+  }, [sessionId, retryOffline]);
+
+  const submitMoodEntry = useCallback(async (moodData: {
     mood: number;
     energy: number;
     stress: number;
@@ -54,23 +123,45 @@ export function useDashboard(sessionId: string | null) {
     if (!sessionId) return { success: false, error: 'No session' };
 
     try {
+      if (!navigator.onLine) {
+        // Add to offline queue
+        addToQueue({
+          type: 'mood',
+          sessionId,
+          data: moodData,
+        });
+        
+        addToast({
+          type: 'info',
+          description: 'Mood entry saved offline. Will sync when connection is restored.',
+        });
+        
+        return { success: true };
+      }
+
       const response = await apiService.submitMoodEntry(sessionId, moodData);
       if (response.success) {
         // Refresh dashboard data after mood entry
         await loadDashboardData();
+        
+        addToast({
+          type: 'success',
+          description: 'Mood entry saved successfully!',
+        });
+        
         return { success: true };
       } else {
+        handleError(response.error || 'Failed to submit mood entry', 'api');
         return { success: false, error: response.error };
       }
     } catch (err) {
-      return { 
-        success: false, 
-        error: err instanceof Error ? err.message : 'Failed to submit mood entry' 
-      };
+      const error = err instanceof Error ? err.message : 'Failed to submit mood entry';
+      handleError(error, 'network');
+      return { success: false, error };
     }
-  };
+  }, [sessionId, addToQueue, addToast, loadDashboardData, handleError]);
 
-  const logActivity = async (activity: {
+  const logActivity = useCallback(async (activity: {
     type: Activity['type'];
     title: string;
     description: string;
@@ -79,34 +170,65 @@ export function useDashboard(sessionId: string | null) {
     if (!sessionId) return { success: false, error: 'No session' };
 
     try {
+      if (!navigator.onLine) {
+        // Add to offline queue
+        addToQueue({
+          type: 'activity',
+          sessionId,
+          data: activity,
+        });
+        
+        addToast({
+          type: 'info',
+          description: 'Activity logged offline. Will sync when connection is restored.',
+        });
+        
+        return { success: true };
+      }
+
       const response = await apiService.logActivity(sessionId, activity);
       if (response.success) {
         // Refresh dashboard data after logging activity
         await loadDashboardData();
         return { success: true };
       } else {
+        handleError(response.error || 'Failed to log activity', 'api');
         return { success: false, error: response.error };
       }
     } catch (err) {
-      return { 
-        success: false, 
-        error: err instanceof Error ? err.message : 'Failed to log activity' 
-      };
+      const error = err instanceof Error ? err.message : 'Failed to log activity';
+      handleError(error, 'network');
+      return { success: false, error };
     }
-  };
+  }, [sessionId, addToQueue, addToast, loadDashboardData, handleError]);
 
+  const retryLoadData = useCallback(async () => {
+    const success = await retry(loadDashboardData);
+    return success;
+  }, [retry, loadDashboardData]);
+
+  // Show queue size notification
   useEffect(() => {
-    if (sessionId) {
-      loadDashboardData();
+    if (queueSize > 0) {
+      addToast({
+        type: 'info',
+        description: `${queueSize} items queued for sync when online`,
+        duration: 3000,
+      });
     }
-  }, [sessionId]);
+  }, [queueSize, addToast]);
 
   return {
     data,
     loading,
-    error,
+    error: errorState.error,
+    errorType: errorState.type,
+    isStale,
+    queueSize,
     refreshData: loadDashboardData,
+    retryLoadData,
     submitMoodEntry,
     logActivity,
+    canRetry: errorState.retryCount < 3,
   };
 }

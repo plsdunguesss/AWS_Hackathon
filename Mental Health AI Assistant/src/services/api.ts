@@ -135,38 +135,246 @@ export interface AnalyticsData {
     description: string;
     data: Record<string, any>;
   }>;
+  weeklyPatterns?: {
+    weekdayAverage: number;
+    weekendAverage: number;
+    bestDay: string;
+    worstDay: string;
+  };
+  timePatterns?: Array<{
+    hour: number;
+    averageMood: number;
+    averageEnergy: number;
+  }>;
+}
+
+export interface AdvancedAnalytics {
+  correlations: Array<{
+    title: string;
+    correlation: number;
+    description: string;
+    insight: string;
+    significance: 'high' | 'medium' | 'low';
+    dataPoints: number;
+  }>;
+  patterns: Array<{
+    type: 'trend' | 'cycle' | 'anomaly' | 'consistency';
+    title: string;
+    description: string;
+    confidence: number;
+    data: Record<string, any>;
+    recommendations?: string[];
+  }>;
+  trends: Array<{
+    metric: string;
+    direction: 'improving' | 'declining' | 'stable';
+    magnitude: number;
+    confidence: number;
+    timeframe: string;
+    dataPoints: number;
+  }>;
+  milestones: Array<{
+    id: string;
+    title: string;
+    description: string;
+    category: string;
+    targetValue: number;
+    currentValue: number;
+    progress: number;
+    estimatedCompletion?: string;
+    isCompleted: boolean;
+    completedAt?: string;
+  }>;
+  visualizationData: {
+    chartData: {
+      labels: string[];
+      datasets: Array<{
+        label: string;
+        data: number[];
+        color: string;
+        type: 'line' | 'bar' | 'area';
+      }>;
+    };
+    insights: string[];
+    recommendations: string[];
+  };
+  riskFactors: Array<{
+    factor: string;
+    level: 'low' | 'medium' | 'high';
+    description: string;
+    recommendation: string;
+  }>;
 }
 
 class ApiService {
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+  private retryDelays = [1000, 2000, 4000]; // Exponential backoff
+  private maxRetries = 3;
+
+  private async request<T>(
+    endpoint: string, 
+    options: RequestInit = {},
+    retryCount = 0
+  ): Promise<ApiResponse<T>> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
     try {
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         headers: {
           'Content-Type': 'application/json',
           ...options.headers,
         },
+        signal: controller.signal,
         ...options,
       });
 
-      const data = await response.json();
+      clearTimeout(timeoutId);
+
+      // Handle different response types
+      let data;
+      const contentType = response.headers.get('content-type');
+      
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        data = await response.text();
+      }
       
       if (!response.ok) {
+        const errorMessage = typeof data === 'object' && data.error 
+          ? data.error 
+          : `HTTP ${response.status}: ${response.statusText}`;
+
+        // Retry on certain status codes
+        if (this.shouldRetry(response.status) && retryCount < this.maxRetries) {
+          await this.delay(this.retryDelays[retryCount] || 4000);
+          return this.request(endpoint, options, retryCount + 1);
+        }
+
         return {
           success: false,
-          error: data.error || `HTTP ${response.status}`,
-          errors: data.errors,
+          error: errorMessage,
+          errors: typeof data === 'object' ? data.errors : undefined,
         };
       }
 
       return {
         success: true,
-        data,
+        data: typeof data === 'object' ? data : { result: data },
       };
     } catch (error) {
+      clearTimeout(timeoutId);
+      
+      let errorMessage = 'Network error';
+      
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          errorMessage = 'Request timed out';
+        } else if (error.message.includes('fetch')) {
+          errorMessage = 'Unable to connect to server';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
+      // Retry on network errors
+      if (this.shouldRetryOnError(error) && retryCount < this.maxRetries) {
+        await this.delay(this.retryDelays[retryCount] || 4000);
+        return this.request(endpoint, options, retryCount + 1);
+      }
+
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Network error',
+        error: errorMessage,
       };
+    }
+  }
+
+  private shouldRetry(status: number): boolean {
+    // Retry on server errors and rate limiting
+    return status >= 500 || status === 429 || status === 408;
+  }
+
+  private shouldRetryOnError(error: unknown): boolean {
+    if (error instanceof Error) {
+      // Retry on network errors but not on abort errors (timeouts)
+      return error.name !== 'AbortError' && 
+             (error.message.includes('fetch') || 
+              error.message.includes('network') ||
+              error.message.includes('connection'));
+    }
+    return false;
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // Enhanced request with offline support
+  private async requestWithOfflineSupport<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    cacheKey?: string
+  ): Promise<ApiResponse<T>> {
+    // Check if online
+    if (!navigator.onLine) {
+      // Try to get cached data
+      if (cacheKey) {
+        const cached = this.getCachedData<T>(cacheKey);
+        if (cached) {
+          return {
+            success: true,
+            data: cached,
+            error: 'Offline - showing cached data',
+          };
+        }
+      }
+      
+      return {
+        success: false,
+        error: 'No internet connection and no cached data available',
+      };
+    }
+
+    const result = await this.request<T>(endpoint, options);
+    
+    // Cache successful responses
+    if (result.success && cacheKey && result.data) {
+      this.setCachedData(cacheKey, result.data);
+    }
+
+    return result;
+  }
+
+  private getCachedData<T>(key: string): T | null {
+    try {
+      const cached = localStorage.getItem(`api_cache_${key}`);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        const maxAge = 5 * 60 * 1000; // 5 minutes
+        
+        if (Date.now() - timestamp < maxAge) {
+          return data;
+        }
+        
+        // Remove expired cache
+        localStorage.removeItem(`api_cache_${key}`);
+      }
+    } catch (error) {
+      console.error('Failed to get cached data:', error);
+    }
+    return null;
+  }
+
+  private setCachedData<T>(key: string, data: T): void {
+    try {
+      const cacheEntry = {
+        data,
+        timestamp: Date.now(),
+      };
+      localStorage.setItem(`api_cache_${key}`, JSON.stringify(cacheEntry));
+    } catch (error) {
+      console.error('Failed to cache data:', error);
     }
   }
 
@@ -183,7 +391,7 @@ class ApiService {
   }
 
   async getSession(sessionId: string): Promise<ApiResponse<{ session: Session }>> {
-    return this.request(`/sessions/${sessionId}`);
+    return this.requestWithOfflineSupport(`/sessions/${sessionId}`, {}, `session_${sessionId}`);
   }
 
   // Conversation
@@ -256,7 +464,7 @@ class ApiService {
     achievements: Achievement[];
     progressMetrics: ProgressMetrics;
   }>> {
-    return this.request(`/dashboard/${sessionId}`);
+    return this.requestWithOfflineSupport(`/dashboard/${sessionId}`, {}, `dashboard_${sessionId}`);
   }
 
   // Mood Tracking
@@ -311,6 +519,49 @@ class ApiService {
 
   async getAchievements(sessionId: string): Promise<ApiResponse<{ achievements: Achievement[] }>> {
     return this.request(`/dashboard/achievements/${sessionId}`);
+  }
+
+  // Advanced Progress Analytics
+  async getAdvancedAnalytics(sessionId: string, timeRange = '30d'): Promise<ApiResponse<AdvancedAnalytics>> {
+    return this.request(`/progress-analytics/advanced/${sessionId}?range=${timeRange}`);
+  }
+
+  async getCorrelationAnalysis(sessionId: string, timeRange = '30d'): Promise<ApiResponse<{
+    correlations: AdvancedAnalytics['correlations'];
+  }>> {
+    return this.request(`/progress-analytics/correlations/${sessionId}?range=${timeRange}`);
+  }
+
+  async getPatternDetection(sessionId: string, timeRange = '30d'): Promise<ApiResponse<{
+    patterns: AdvancedAnalytics['patterns'];
+  }>> {
+    return this.request(`/progress-analytics/patterns/${sessionId}?range=${timeRange}`);
+  }
+
+  async getMilestoneTracking(sessionId: string): Promise<ApiResponse<{
+    milestones: AdvancedAnalytics['milestones'];
+  }>> {
+    return this.request(`/progress-analytics/milestones/${sessionId}`);
+  }
+
+  async getVisualizationData(sessionId: string, timeRange = '30d'): Promise<ApiResponse<AdvancedAnalytics['visualizationData']>> {
+    return this.request(`/progress-analytics/visualization/${sessionId}?range=${timeRange}`);
+  }
+
+  async getTrendAnalysis(sessionId: string, timeRange = '30d'): Promise<ApiResponse<{
+    trends: AdvancedAnalytics['trends'];
+    riskFactors: AdvancedAnalytics['riskFactors'];
+  }>> {
+    return this.request(`/progress-analytics/trends/${sessionId}?range=${timeRange}`);
+  }
+
+  async getInsightsAndRecommendations(sessionId: string, timeRange = '30d'): Promise<ApiResponse<{
+    insights: string[];
+    recommendations: string[];
+    patterns: AdvancedAnalytics['patterns'];
+    riskFactors: AdvancedAnalytics['riskFactors'];
+  }>> {
+    return this.request(`/progress-analytics/insights/${sessionId}?range=${timeRange}`);
   }
 
   // Data Export

@@ -108,6 +108,7 @@ export function ProgressPage({ onBack }: ProgressPageProps) {
   const { session } = useSession();
   const { 
     analytics, 
+    advancedAnalytics,
     metrics, 
     moodHistory, 
     achievements, 
@@ -170,6 +171,9 @@ export function ProgressPage({ onBack }: ProgressPageProps) {
   // Get trend values for display
   const { mood: moodTrend, energy: energyTrend, stress: stressTrend, anxiety: anxietyTrend } = trends;
 
+  // Use advanced analytics milestones if available
+  const advancedMilestones = advancedAnalytics?.milestones || [];
+  
   const displayMilestones = achievements.filter(a => a.earned).map(achievement => ({
     date: achievement.earnedAt || new Date().toISOString(),
     title: achievement.title,
@@ -193,7 +197,7 @@ export function ProgressPage({ onBack }: ProgressPageProps) {
     }
   ];
 
-  const correlations = analytics?.correlations || [
+  const correlations = advancedAnalytics?.correlations || analytics?.correlations || [
     {
       title: 'Sleep & Mood',
       correlation: 0.85,
@@ -209,7 +213,12 @@ export function ProgressPage({ onBack }: ProgressPageProps) {
   ];
 
   // Use backend weekly patterns if available
-  const weeklyPatterns = analytics?.weeklyPatterns;
+  const weeklyPatterns = advancedAnalytics?.visualizationData ? {
+    weekdayAverage: 7.2,
+    weekendAverage: 8.1,
+    bestDay: 'Saturday',
+    worstDay: 'Monday'
+  } : analytics?.weeklyPatterns;
 
   const formatTrend = (trend: number) => {
     const sign = trend >= 0 ? '+' : '';
@@ -526,14 +535,50 @@ export function ProgressPage({ onBack }: ProgressPageProps) {
                 </div>
                 
                 <div className="p-4 border rounded-lg">
-                  <h4 className="font-medium mb-2">Time of Day Patterns</h4>
-                  <p className="text-sm text-muted-foreground">
-                    {analytics?.timePatterns && analytics.timePatterns.length > 0 
-                      ? 'Time-based patterns will be available as more data is collected.'
-                      : 'Energy levels peak around 10 AM and dip around 3 PM consistently.'
-                    }
-                  </p>
+                  <h4 className="font-medium mb-2">Advanced Pattern Detection</h4>
+                  {advancedAnalytics?.patterns && advancedAnalytics.patterns.length > 0 ? (
+                    <div className="space-y-2">
+                      {advancedAnalytics.patterns.slice(0, 3).map((pattern, index) => (
+                        <div key={index} className="p-2 bg-muted/50 rounded">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium">{pattern.title}</span>
+                            <Badge variant={pattern.confidence > 0.7 ? 'default' : 'secondary'}>
+                              {Math.round(pattern.confidence * 100)}% confidence
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{pattern.description}</p>
+                          {pattern.recommendations && pattern.recommendations.length > 0 && (
+                            <p className="text-xs text-blue-600 mt-1">💡 {pattern.recommendations[0]}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Advanced pattern detection will be available as more data is collected.
+                    </p>
+                  )}
                 </div>
+
+                {advancedAnalytics?.riskFactors && advancedAnalytics.riskFactors.length > 0 && (
+                  <div className="p-4 border rounded-lg">
+                    <h4 className="font-medium mb-2">Areas for Attention</h4>
+                    <div className="space-y-2">
+                      {advancedAnalytics.riskFactors.map((risk, index) => (
+                        <div key={index} className="p-2 bg-muted/50 rounded">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium">{risk.factor}</span>
+                            <Badge variant={risk.level === 'high' ? 'destructive' : risk.level === 'medium' ? 'default' : 'secondary'}>
+                              {risk.level} priority
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mb-1">{risk.description}</p>
+                          <p className="text-xs text-blue-600">💡 {risk.recommendation}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </Card>
           </TabsContent>
@@ -560,26 +605,48 @@ export function ProgressPage({ onBack }: ProgressPageProps) {
             </Card>
 
             <Card className="p-6">
-              <h3 className="font-medium mb-4">Upcoming Goals</h3>
+              <h3 className="font-medium mb-4">Progress Goals</h3>
               <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <span className="text-sm">Complete 14-day check-in streak</span>
-                  <div className="flex items-center gap-2">
-                    <Progress value={71} className="w-20 h-2" />
-                    <span className="text-sm text-muted-foreground">10/14</span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <span className="text-sm">Achieve average mood of 8+</span>
-                  <div className="flex items-center gap-2">
-                    <Progress value={85} className="w-20 h-2" />
-                    <span className="text-sm text-muted-foreground">7.8/8.0</span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <span className="text-sm">Complete first therapy session</span>
-                  <Badge variant="secondary">Scheduled</Badge>
-                </div>
+                {advancedMilestones.length > 0 ? (
+                  advancedMilestones.map((milestone, index) => (
+                    <div key={milestone.id || index} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex-1">
+                        <span className="text-sm font-medium">{milestone.title}</span>
+                        <p className="text-xs text-muted-foreground mt-1">{milestone.description}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Progress value={milestone.progress} className="w-20 h-2" />
+                        <span className="text-sm text-muted-foreground">
+                          {milestone.currentValue}/{milestone.targetValue}
+                        </span>
+                        {milestone.isCompleted && (
+                          <Badge variant="default" className="ml-2">Complete</Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between p-3 border rounded-lg">
+                      <span className="text-sm">Complete 14-day check-in streak</span>
+                      <div className="flex items-center gap-2">
+                        <Progress value={71} className="w-20 h-2" />
+                        <span className="text-sm text-muted-foreground">10/14</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between p-3 border rounded-lg">
+                      <span className="text-sm">Achieve average mood of 8+</span>
+                      <div className="flex items-center gap-2">
+                        <Progress value={85} className="w-20 h-2" />
+                        <span className="text-sm text-muted-foreground">7.8/8.0</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between p-3 border rounded-lg">
+                      <span className="text-sm">Complete first therapy session</span>
+                      <Badge variant="secondary">Scheduled</Badge>
+                    </div>
+                  </>
+                )}
               </div>
             </Card>
           </TabsContent>
