@@ -7,10 +7,14 @@ import rateLimit from 'express-rate-limit';
 // Load environment variables
 dotenv.config();
 import { Database } from './database/database';
+import { SessionService } from './services/sessionService';
 import { conversationRoutes } from './routes/conversation';
 import { riskAssessmentRoutes } from './routes/riskAssessment';
 import { sessionRoutes } from './routes/session';
 import { healthRoutes } from './routes/health';
+import { dashboardRoutes } from './routes/dashboard';
+import { userRoutes } from './routes/user';
+import { progressAnalyticsRoutes } from './routes/progressAnalytics';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -47,6 +51,9 @@ app.use('/api/health', healthRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/conversation', conversationRoutes);
 app.use('/api/risk-assessment', riskAssessmentRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/user', userRoutes);
+app.use('/api/progress-analytics', progressAnalyticsRoutes);
 
 // Error handling middleware
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -77,9 +84,14 @@ async function startServer() {
         const db = Database.getInstance();
         await db.initialize();
         
-        // Clean up old sessions on startup
-        await db.cleanupOldSessions(24);
-        console.log('Database initialized and cleaned up');
+        // Initialize session service and start automatic cleanup
+        const sessionService = SessionService.getInstance();
+        const cleanedUpCount = await sessionService.cleanupOldSessions(24);
+        console.log(`Database initialized. Cleaned up ${cleanedUpCount} old sessions on startup.`);
+        
+        // Start automatic cleanup every 6 hours, removing sessions older than 24 hours
+        sessionService.startAutomaticCleanup(6, 24);
+        console.log('Automatic session cleanup started (every 6 hours, removing sessions older than 24 hours)');
 
         app.listen(PORT, () => {
             console.log(`Mental Health AI Assistant backend server running on port ${PORT}`);

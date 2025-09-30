@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, MessageCircle, TrendingUp, Calendar, Settings, Bell, Heart, Brain, Users, Award, Plus, BarChart3, Clock } from "lucide-react";
+import { MessageCircle, TrendingUp, Calendar, Settings, Bell, Heart, Brain, Users, Award, Plus, BarChart3, Clock, AlertTriangle } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -7,6 +7,9 @@ import { Progress } from "./ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Separator } from "./ui/separator";
+import { Alert, AlertDescription } from "./ui/alert";
+import { useSession } from "../hooks/useSession";
+import { useDashboard } from "../hooks/useDashboard";
 
 interface DashboardPageProps {
   onBack: () => void;
@@ -98,6 +101,71 @@ const moodData = [
   { date: '2024-01-07', mood: 7, energy: 6, stress: 4 }
 ];
 
+// Helper function to get icon for activity type
+const getActivityIcon = (type: string) => {
+  switch (type) {
+    case 'chat': return MessageCircle;
+    case 'assessment': return BarChart3;
+    case 'resource': return Heart;
+    case 'professional': return Users;
+    default: return Clock;
+  }
+};
+
+// Helper function to get icon for task type
+const getTaskIcon = (type: string) => {
+  switch (type) {
+    case 'assessment': return BarChart3;
+    case 'mindfulness': return Heart;
+    case 'appointment': return Calendar;
+    case 'journal': return Brain;
+    default: return Clock;
+  }
+};
+
+// Helper function to get icon for achievement
+const getAchievementIcon = (iconName: string) => {
+  switch (iconName) {
+    case 'Award': return Award;
+    case 'Heart': return Heart;
+    case 'BarChart3': return BarChart3;
+    case 'Users': return Users;
+    case 'MessageCircle': return MessageCircle;
+    case 'TrendingUp': return TrendingUp;
+    default: return Award;
+  }
+};
+
+// Helper function to get color for achievement category
+const getAchievementColor = (category: string) => {
+  switch (category) {
+    case 'consistency': return 'text-yellow-600';
+    case 'wellness': return 'text-green-600';
+    case 'progress': return 'text-blue-600';
+    case 'support': return 'text-purple-600';
+    case 'engagement': return 'text-orange-600';
+    default: return 'text-gray-600';
+  }
+};
+
+// Helper function to format time ago
+const formatTimeAgo = (timestamp: string) => {
+  const now = new Date();
+  const time = new Date(timestamp);
+  const diffInMinutes = Math.floor((now.getTime() - time.getTime()) / (1000 * 60));
+  
+  if (diffInMinutes < 1) return 'Just now';
+  if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
+  
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `${diffInHours} hours ago`;
+  
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 7) return `${diffInDays} days ago`;
+  
+  return time.toLocaleDateString();
+};
+
 const achievements = [
   {
     id: '1',
@@ -143,10 +211,107 @@ export function DashboardPage({
   onViewSettings
 }: DashboardPageProps) {
   const [selectedTab, setSelectedTab] = useState('overview');
+  const { session } = useSession();
+  const { data, loading, error, refreshData, submitMoodEntry, logActivity } = useDashboard(session?.id || null);
 
-  const currentMood = moodData[moodData.length - 1];
-  const averageMood = Math.round(moodData.reduce((acc, day) => acc + day.mood, 0) / moodData.length);
-  const moodTrend = currentMood.mood > moodData[moodData.length - 2]?.mood ? 'up' : 'down';
+  // Fallback data for when backend is not available
+  const fallbackMoodData = [
+    { date: '2024-01-01', mood: 7, energy: 6, stress: 4 },
+    { date: '2024-01-02', mood: 6, energy: 5, stress: 5 },
+    { date: '2024-01-03', mood: 8, energy: 7, stress: 3 },
+    { date: '2024-01-04', mood: 7, energy: 6, stress: 4 },
+    { date: '2024-01-05', mood: 9, energy: 8, stress: 2 },
+    { date: '2024-01-06', mood: 8, energy: 7, stress: 3 },
+    { date: '2024-01-07', mood: 7, energy: 6, stress: 4 }
+  ];
+
+  // Use backend data if available, otherwise fallback to mock data
+  const currentMood = data?.currentMood || {
+    mood: fallbackMoodData[fallbackMoodData.length - 1].mood,
+    energy: fallbackMoodData[fallbackMoodData.length - 1].energy,
+    stress: fallbackMoodData[fallbackMoodData.length - 1].stress,
+    anxiety: 3,
+    sleep: 7
+  };
+
+  const recentActivities = data?.recentActivities || [
+    {
+      id: '1',
+      type: 'chat' as const,
+      title: 'AI Assistant Chat',
+      description: 'Discussed anxiety management strategies',
+      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      icon: MessageCircle
+    },
+    {
+      id: '2',
+      type: 'assessment' as const,
+      title: 'Mental Health Check-in',
+      description: 'Completed weekly assessment',
+      timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      icon: BarChart3
+    }
+  ];
+
+  const upcomingTasks = data?.upcomingTasks || [
+    {
+      id: '1',
+      title: 'Weekly Mental Health Check-in',
+      description: 'Take your weekly assessment to track progress',
+      dueDate: 'Today',
+      priority: 'high' as const,
+      type: 'assessment'
+    },
+    {
+      id: '2',
+      title: 'Practice Mindfulness',
+      description: 'Daily 10-minute meditation session',
+      dueDate: 'Today',
+      priority: 'medium' as const,
+      type: 'mindfulness'
+    }
+  ];
+
+  const achievements = data?.achievements || [
+    {
+      id: '1',
+      title: '7-Day Streak',
+      description: 'Completed daily check-ins for a week',
+      earned: true,
+      icon: 'Award',
+      category: 'consistency'
+    },
+    {
+      id: '2',
+      title: 'Mindfulness Master',
+      description: 'Completed 10 mindfulness exercises',
+      earned: true,
+      icon: 'Heart',
+      category: 'wellness'
+    }
+  ];
+
+  const progressMetrics = data?.progressMetrics || {
+    overallProgress: 85,
+    streakDays: 7,
+    totalCheckIns: 15,
+    totalChatSessions: 3,
+    totalResourcesAccessed: 8,
+    averageMood: Math.round(fallbackMoodData.reduce((acc, day) => acc + day.mood, 0) / fallbackMoodData.length),
+    moodTrend: 12,
+    riskLevel: 15
+  };
+
+  const moodTrend = progressMetrics.moodTrend > 0 ? 'up' : 'down';
+  const averageMood = progressMetrics.averageMood;
+
+  const handleQuickAction = async (actionType: string, title: string) => {
+    await logActivity({
+      type: actionType as any,
+      title: `Started ${title}`,
+      description: `User initiated ${title.toLowerCase()} from dashboard`,
+    });
+  };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -157,20 +322,28 @@ export function DashboardPage({
     }
   };
 
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+        <div className="text-center">
+          <BarChart3 className="h-12 w-12 mx-auto mb-4 text-primary animate-pulse" />
+          <p className="text-lg font-medium">Loading your dashboard...</p>
+          <p className="text-sm text-muted-foreground">Gathering your latest progress data</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="bg-muted/30">
       {/* Header */}
-      <div className="border-b bg-card">
-        <div className="container max-w-6xl mx-auto px-4 py-4">
+      <div className="border-b bg-card mb-6">
+        <div className="px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" onClick={onBack}>
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <div>
-                <h1 className="text-2xl">Welcome back, Sarah!</h1>
-                <p className="text-muted-foreground">Here's your mental health journey overview</p>
-              </div>
+            <div>
+              <h1 className="text-2xl">Welcome back!</h1>
+              <p className="text-muted-foreground">Here's your mental health journey overview</p>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon">
@@ -184,7 +357,19 @@ export function DashboardPage({
         </div>
       </div>
 
-      <div className="container max-w-6xl mx-auto px-4 py-8">
+      {/* Error Alert */}
+      {error && (
+        <div className="px-4 pt-4">
+          <Alert className="border-orange-200 bg-orange-50">
+            <AlertTriangle className="h-4 w-4 text-orange-600" />
+            <AlertDescription className="text-orange-800">
+              <strong>Connection Issue:</strong> {error}. Showing cached data.
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
+
+      <div className="px-4 py-8">
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -196,7 +381,10 @@ export function DashboardPage({
           <TabsContent value="overview" className="space-y-6">
             {/* Quick Actions */}
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={onStartChat}>
+              <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => {
+                handleQuickAction('chat', 'AI Chat');
+                onStartChat();
+              }}>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
                     <MessageCircle className="h-5 w-5 text-primary" />
@@ -208,7 +396,10 @@ export function DashboardPage({
                 </div>
               </Card>
 
-              <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={onStartAssessment}>
+              <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => {
+                handleQuickAction('assessment', 'Check-in');
+                onStartAssessment();
+              }}>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                     <BarChart3 className="h-5 w-5 text-blue-600" />
@@ -277,7 +468,10 @@ export function DashboardPage({
                     <Progress value={currentMood.stress * 10} className="h-2 [&>div]:bg-red-500" />
                   </div>
                 </div>
-                <Button variant="outline" size="sm" className="w-full mt-4" onClick={onStartAssessment}>
+                <Button variant="outline" size="sm" className="w-full mt-4" onClick={() => {
+                  handleQuickAction('assessment', 'Mood Update');
+                  onStartAssessment();
+                }}>
                   Update Check-in
                 </Button>
               </Card>
@@ -292,7 +486,7 @@ export function DashboardPage({
                 </div>
                 <div className="space-y-3">
                   {upcomingTasks.slice(0, 3).map((task) => {
-                    const Icon = task.icon;
+                    const Icon = getTaskIcon(task.type);
                     return (
                       <div key={task.id} className={`p-3 rounded-lg border-l-4 ${getPriorityColor(task.priority)}`}>
                         <div className="flex items-start gap-3">
@@ -317,7 +511,8 @@ export function DashboardPage({
                 <h3 className="font-medium mb-4">Recent Activity</h3>
                 <div className="space-y-3">
                   {recentActivities.slice(0, 3).map((activity) => {
-                    const Icon = activity.icon;
+                    const Icon = activity.icon || getActivityIcon(activity.type);
+                    const timeAgo = formatTimeAgo(activity.timestamp);
                     return (
                       <div key={activity.id} className="flex items-start gap-3">
                         <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center flex-shrink-0">
@@ -326,7 +521,7 @@ export function DashboardPage({
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm">{activity.title}</p>
                           <p className="text-xs text-muted-foreground">{activity.description}</p>
-                          <p className="text-xs text-muted-foreground">{activity.timestamp}</p>
+                          <p className="text-xs text-muted-foreground">{timeAgo}</p>
                         </div>
                       </div>
                     );
@@ -400,7 +595,8 @@ export function DashboardPage({
               <h3 className="font-medium mb-4">All Activities</h3>
               <div className="space-y-4">
                 {recentActivities.map((activity) => {
-                  const Icon = activity.icon;
+                  const Icon = activity.icon || getActivityIcon(activity.type);
+                  const timeAgo = formatTimeAgo(activity.timestamp);
                   return (
                     <div key={activity.id} className="flex items-start gap-4 p-4 rounded-lg border">
                       <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center flex-shrink-0">
@@ -409,7 +605,7 @@ export function DashboardPage({
                       <div className="flex-1">
                         <h4 className="font-medium">{activity.title}</h4>
                         <p className="text-sm text-muted-foreground">{activity.description}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{activity.timestamp}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{timeAgo}</p>
                       </div>
                       <Button variant="ghost" size="sm">
                         View Details
@@ -424,14 +620,15 @@ export function DashboardPage({
           <TabsContent value="achievements" className="space-y-6">
             <div className="grid md:grid-cols-2 gap-4">
               {achievements.map((achievement) => {
-                const Icon = achievement.icon;
+                const Icon = getAchievementIcon(achievement.icon);
+                const iconColor = achievement.earned ? getAchievementColor(achievement.category) : 'text-gray-400';
                 return (
                   <Card key={achievement.id} className={`p-6 ${achievement.earned ? 'bg-muted/30' : 'opacity-60'}`}>
                     <div className="flex items-start gap-4">
                       <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
                         achievement.earned ? 'bg-primary/10' : 'bg-muted'
                       }`}>
-                        <Icon className={`h-6 w-6 ${achievement.color}`} />
+                        <Icon className={`h-6 w-6 ${iconColor}`} />
                       </div>
                       <div className="flex-1">
                         <h4 className="font-medium">{achievement.title}</h4>

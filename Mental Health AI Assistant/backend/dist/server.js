@@ -11,6 +11,7 @@ const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 // Load environment variables
 dotenv_1.default.config();
 const database_1 = require("./database/database");
+const sessionService_1 = require("./services/sessionService");
 const conversation_1 = require("./routes/conversation");
 const riskAssessment_1 = require("./routes/riskAssessment");
 const session_1 = require("./routes/session");
@@ -69,9 +70,13 @@ async function startServer() {
         console.log('Initializing database...');
         const db = database_1.Database.getInstance();
         await db.initialize();
-        // Clean up old sessions on startup
-        await db.cleanupOldSessions(24);
-        console.log('Database initialized and cleaned up');
+        // Initialize session service and start automatic cleanup
+        const sessionService = sessionService_1.SessionService.getInstance();
+        const cleanedUpCount = await sessionService.cleanupOldSessions(24);
+        console.log(`Database initialized. Cleaned up ${cleanedUpCount} old sessions on startup.`);
+        // Start automatic cleanup every 6 hours, removing sessions older than 24 hours
+        sessionService.startAutomaticCleanup(6, 24);
+        console.log('Automatic session cleanup started (every 6 hours, removing sessions older than 24 hours)');
         app.listen(PORT, () => {
             console.log(`Mental Health AI Assistant backend server running on port ${PORT}`);
             console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);

@@ -1,0 +1,45 @@
+{
+  "exportDate": "2025-09-29T19:34:12.447Z",
+  "sessionId": "1ff078c2-9182-4762-814e-7cf0c35c88a2",
+  "profile": {
+    "id": "6a154fd9-5ee4-43cb-af3a-33a25fe002e7",
+    "sessionId": "1ff078c2-9182-4762-814e-7cf0c35c88a2",
+    "firstName": "John",
+    "lastName": "Doe",
+    "email": "john.doe@example.com",
+    "bio": "Test user for mental health assistant",
+    "phone": null,
+    "avatarUrl": null,
+    "createdAt": "2025-09-29T19:34:12.390Z",
+    "updatedAt": "2025-09-29T19:34:12.390Z"
+  },
+  "preferences": {
+    "id": "6fe3b759-2083-4105-88aa-21a264e1de42",
+    "sessionId": "1ff078c2-9182-4762-814e-7cf0c35c88a2",
+    "theme": "dark",
+    "language": "en",
+    "timezone": "America/New_York",
+    "reminderTime": "09:00",
+    "weeklyReportDay": "sunday",
+    "notifications": {
+      "checkInReminders": true,
+      "chatNotifications": false,
+      "appointmentReminders": true,
+      "weeklyReports": true,
+      "emergencyAlerts": true,
+      "marketingEmails": false
+    },
+    "privacy": {
+      "dataSharing": false,
+      "anonymousResearch": true,
+      "profileVisibility": "healthcare",
+      "activityTracking": true
+    },
+    "createdAt": "2025-09-29T19:34:12.422Z",
+    "updatedAt": "2025-09-29T19:34:12.422Z"
+  },
+  "messages": [],
+  "moodEntries": [],
+  "activities": [],
+  "riskAssessments": []
+}

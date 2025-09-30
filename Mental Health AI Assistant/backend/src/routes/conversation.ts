@@ -1,11 +1,13 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import { v4 as uuidv4 } from 'uuid';
-import { Database } from '../database/database';
+import { SessionService } from '../services/sessionService';
+import { ConversationService } from '../services/conversationService';
 import { OllamaService } from '../services/ollamaService';
 import { Message, ConversationContext } from '../types';
 
 const router = express.Router();
+const sessionService = SessionService.getInstance();
+const conversationService = new ConversationService();
 
 // Validation middleware
 const validateMessage = [
@@ -26,104 +28,68 @@ router.post('/message', validateMessage, async (req: express.Request, res: expre
         }
 
         const { sessionId, message } = req.body;
-        const db = Database.getInstance();
-        const ollamaService = new OllamaService();
 
-        // Verify session exists
-        const session = await db.get('SELECT * FROM sessions WHERE id = ?', [sessionId]);
-        if (!session) {
-            return res.status(404).json({
-                success: false,
-                error: 'Session not found'
-            });
-        }
-
-        // Get conversation history for context
-        const messageHistory = await db.all<Message>(
-            `SELECT * FROM messages 
-             WHERE session_id = ? 
-             ORDER BY timestamp ASC 
-             LIMIT 10`,
-            [sessionId]
-        );
+        // Verify session exists and get conversation context
+        const context = await sessionService.getConversationContext(sessionId);
 
         // Store user message
-        const userMessageId = uuidv4();
-        const timestamp = new Date().toISOString();
-        
-        await db.run(
-            `INSERT INTO messages (id, session_id, content, sender, timestamp, empathy_score)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [userMessageId, sessionId, message, 'user', timestamp, 0.0]
+        const userMessage = await sessionService.storeMessage(sessionId, message, 'user');
+
+        // Process message with AI and safety monitoring
+        const aiResponse = await conversationService.processMessage(sessionId, message, context);
+
+        // Store AI response with empathy score
+        const assistantMessage = await sessionService.storeMessage(
+            sessionId, 
+            aiResponse.content, 
+            'assistant', 
+            aiResponse.empathyScore
         );
 
-        // Prepare context for AI
-        const context: ConversationContext = {
-            sessionId,
-            messageHistory,
-            currentRiskScore: session.risk_score || 0,
-        };
+        // Store risk assessment
+        await sessionService.storeRiskAssessment(sessionId, aiResponse.riskAssessment, assistantMessage.id);
 
-        // Generate AI response
-        const conversationHistory = messageHistory.map(msg => 
-            `${msg.sender}: ${msg.content}`
-        );
-
-        const prompt = ollamaService.createMentalHealthPrompt(message, {
-            sessionHistory: conversationHistory,
-            riskLevel: context.currentRiskScore
-        });
-
-        let aiResponse: string;
-        try {
-            aiResponse = await ollamaService.generateResponse(prompt, {
-                temperature: 0.7,
-                top_p: 0.9
-            });
-        } catch (ollamaError) {
-            console.error('Ollama service error:', ollamaError);
-            // Fallback response if Ollama is unavailable
-            aiResponse = "I understand you're reaching out, and I want you to know that your feelings are valid. While I'm having some technical difficulties right now, I encourage you to speak with a mental health professional who can provide you with the support you deserve. If you're in crisis, please contact a crisis hotline or emergency services immediately.";
+        // Update session risk score if needed
+        if (aiResponse.riskAssessment.overallRisk > context.currentRiskScore) {
+            await sessionService.updateRiskScore(
+                sessionId, 
+                aiResponse.riskAssessment.overallRisk / 100, // Convert to 0-1 scale
+                aiResponse.requiresReferral
+            );
         }
-
-        // Store AI response
-        const aiMessageId = uuidv4();
-        const aiTimestamp = new Date().toISOString();
-        
-        await db.run(
-            `INSERT INTO messages (id, session_id, content, sender, timestamp, empathy_score)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [aiMessageId, sessionId, aiResponse, 'assistant', aiTimestamp, 0.8] // Default empathy score
-        );
-
-        // Update session last activity
-        await db.run(
-            'UPDATE sessions SET last_activity = ?, updated_at = ? WHERE id = ?',
-            [aiTimestamp, aiTimestamp, sessionId]
-        );
 
         // Return the conversation
         res.json({
             success: true,
             conversation: {
                 userMessage: {
-                    id: userMessageId,
-                    content: message,
-                    sender: 'user',
-                    timestamp: timestamp
+                    id: userMessage.id,
+                    content: userMessage.content,
+                    sender: userMessage.sender,
+                    timestamp: userMessage.timestamp
                 },
                 aiResponse: {
-                    id: aiMessageId,
-                    content: aiResponse,
-                    sender: 'assistant',
-                    timestamp: aiTimestamp
+                    id: assistantMessage.id,
+                    content: assistantMessage.content,
+                    sender: assistantMessage.sender,
+                    timestamp: assistantMessage.timestamp,
+                    empathyScore: assistantMessage.empathyScore
                 }
             },
+            riskAssessment: aiResponse.riskAssessment,
+            safetyFlags: aiResponse.safetyFlags,
+            requiresReferral: aiResponse.requiresReferral,
             sessionId
         });
 
     } catch (error) {
         console.error('Error processing message:', error);
+        if (error instanceof Error && error.message === 'Session not found') {
+            return res.status(404).json({
+                success: false,
+                error: 'Session not found'
+            });
+        }
         res.status(500).json({
             success: false,
             error: 'Failed to process message'
@@ -136,23 +102,11 @@ router.get('/:sessionId/history', async (req: express.Request, res: express.Resp
     try {
         const { sessionId } = req.params;
         const { limit = 50, offset = 0 } = req.query;
-        const db = Database.getInstance();
 
-        // Verify session exists
-        const session = await db.get('SELECT id FROM sessions WHERE id = ?', [sessionId]);
-        if (!session) {
-            return res.status(404).json({
-                success: false,
-                error: 'Session not found'
-            });
-        }
-
-        const messages = await db.all<Message>(
-            `SELECT * FROM messages 
-             WHERE session_id = ? 
-             ORDER BY timestamp ASC 
-             LIMIT ? OFFSET ?`,
-            [sessionId, Number(limit), Number(offset)]
+        const messages = await sessionService.getConversationHistory(
+            sessionId,
+            Number(limit),
+            Number(offset)
         );
 
         res.json({
@@ -164,6 +118,12 @@ router.get('/:sessionId/history', async (req: express.Request, res: express.Resp
 
     } catch (error) {
         console.error('Error getting conversation history:', error);
+        if (error instanceof Error && error.message === 'Session not found') {
+            return res.status(404).json({
+                success: false,
+                error: 'Session not found'
+            });
+        }
         res.status(500).json({
             success: false,
             error: 'Failed to get conversation history'
